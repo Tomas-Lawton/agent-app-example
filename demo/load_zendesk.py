@@ -5,8 +5,12 @@ Usage (from the repository root):
   start:      skip the first N tickets (to resume after an interruption without duplicating)
   --limit N:  import at most N tickets (default 120; the survey in BigQuery supplies the rest of the volume)
   --clear:    first delete every ticket an earlier load tagged `demo`
+  --only i,j: import just these row numbers (to retry ones a batch reported as failed)
 
-Gentle on purpose, so a trial account isn't flagged: every ticket comes from the account's own admin user (no
+Warning: on Zendesk trial accounts the ticket import API is tightly limited, and after a few dozen imported tickets
+Zendesk has locked trial accounts against further writes ("this Zendesk account has expired"); reading still works.
+Import a small set once (--limit 30), and use a paid or sandbox account for more.
+Gentle on purpose: every ticket comes from the account's own admin user (no
 made up customer accounts), in batches of 30 with a pause between them. Credentials can be passed as environment
 variables for this one command; nothing needs to be saved.
 
@@ -17,7 +21,7 @@ which only ever reads with its own read only connection. Reads profiles/demo/dat
 original date, in batches of 100. Then prints the read connection to add during setup.
 Check Zendesk's current API docs if anything fails; the import API needs an admin and may change.
 """
-import base64, csv, json, os, sys, time, urllib.error, urllib.request
+import base64, csv, datetime, json, os, sys, time, urllib.error, urllib.request
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "engine"))
@@ -27,7 +31,8 @@ if len(sys.argv) < 2:
     sys.exit(__doc__)
 argv = sys.argv[1:]
 limit = int(argv[argv.index("--limit") + 1]) if "--limit" in argv else 120
-args = [a for n, a in enumerate(argv) if not a.startswith("--") and (n == 0 or argv[n - 1] != "--limit")]
+only = [int(i) for i in argv[argv.index("--only") + 1].split(",")] if "--only" in argv else None
+args = [a for n, a in enumerate(argv) if not a.startswith("--") and (n == 0 or argv[n - 1] not in ("--limit", "--only"))]
 sub, creds, bearer = args[0], env("ZENDESK_LOADER"), None
 if env("ZENDESK_CLIENT_ID") and env("ZENDESK_CLIENT_SECRET"):
     req = urllib.request.Request(f"https://{sub}.zendesk.com/oauth/tokens", method="POST", headers={"Content-Type": "application/json"},
@@ -80,12 +85,19 @@ if "--clear" in sys.argv:  # delete every ticket an earlier demo load created
         removed += len(ids); print(f"deleted {removed} demo tickets"); time.sleep(5)
     print(f"cleared {removed} demo tickets")
 
-rows = rows[:limit]
+rows = [rows[i] for i in only] if only else rows[:limit]
 me = call(f"https://{sub}.zendesk.com/api/v2/users/me.json")["user"]["id"]  # one requester: the admin running the import
 start = int(args[1]) if len(args) > 1 else 0
+def stamp(day):
+    """10:00 UTC on the ticket's day, but never in the future (Zendesk refuses future dates)."""
+    t = datetime.datetime.fromisoformat(f"{day}T10:00:00+00:00")
+    now = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(minutes=10)
+    return min(t, now).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
 for n in range(start, len(rows), 30):
-    batch = [{"subject": r["subject"], "comments": [{"value": r["description"], "created_at": f"{r['created_at']}T10:00:00Z"}],
-              "description": r["description"], "created_at": f"{r['created_at']}T10:00:00Z", "tags": ["demo", r["channel"].replace(" ", "_")],
+    batch = [{"subject": r["subject"], "comments": [{"value": r["description"], "created_at": stamp(r["created_at"])}],
+              "description": r["description"], "created_at": stamp(r["created_at"]), "tags": ["demo", r["channel"].replace(" ", "_")],
               "requester_id": me}
              for r in rows[n:n + 30]]
     job = post(f"https://{sub}.zendesk.com/api/v2/imports/tickets/create_many", {"tickets": batch}).get("job_status", {})
