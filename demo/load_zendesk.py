@@ -1,9 +1,14 @@
 """Import the demo's support tickets into a Zendesk account, as Capital Bank of Australia's helpdesk.
 
 Usage (from the repository root):
-  python3 demo/load_zendesk.py <subdomain> [start] [--clear]   for https://<subdomain>.zendesk.com
-  start:    skip the first N tickets (to resume after an interruption without duplicating)
-  --clear:  first delete every ticket an earlier load tagged `demo`
+  python3 demo/load_zendesk.py <subdomain> [start] [--limit N] [--clear]   for https://<subdomain>.zendesk.com
+  start:      skip the first N tickets (to resume after an interruption without duplicating)
+  --limit N:  import at most N tickets (default 120; the survey in BigQuery supplies the rest of the volume)
+  --clear:    first delete every ticket an earlier load tagged `demo`
+
+Gentle on purpose, so a trial account isn't flagged: every ticket comes from the account's own admin user (no
+made up customer accounts), in batches of 30 with a pause between them. Credentials can be passed as environment
+variables for this one command; nothing needs to be saved.
 
 Writing needs a write token, fetched fresh from the OAuth client in .env (ZENDESK_CLIENT_ID, ZENDESK_CLIENT_SECRET,
 a Confidential client), or ZENDESK_LOADER as "<agent email>/token:<API token>". This is demo setup, not the brief,
@@ -20,7 +25,9 @@ from core.config import env  # noqa: E402
 
 if len(sys.argv) < 2:
     sys.exit(__doc__)
-args = [a for a in sys.argv[1:] if not a.startswith("--")]
+argv = sys.argv[1:]
+limit = int(argv[argv.index("--limit") + 1]) if "--limit" in argv else 120
+args = [a for n, a in enumerate(argv) if not a.startswith("--") and (n == 0 or argv[n - 1] != "--limit")]
 sub, creds, bearer = args[0], env("ZENDESK_LOADER"), None
 if env("ZENDESK_CLIENT_ID") and env("ZENDESK_CLIENT_SECRET"):
     req = urllib.request.Request(f"https://{sub}.zendesk.com/oauth/tokens", method="POST", headers={"Content-Type": "application/json"},
@@ -73,12 +80,14 @@ if "--clear" in sys.argv:  # delete every ticket an earlier demo load created
         removed += len(ids); print(f"deleted {removed} demo tickets"); time.sleep(5)
     print(f"cleared {removed} demo tickets")
 
+rows = rows[:limit]
+me = call(f"https://{sub}.zendesk.com/api/v2/users/me.json")["user"]["id"]  # one requester: the admin running the import
 start = int(args[1]) if len(args) > 1 else 0
-for n in range(start, len(rows), 100):
+for n in range(start, len(rows), 30):
     batch = [{"subject": r["subject"], "comments": [{"value": r["description"], "created_at": f"{r['created_at']}T10:00:00Z"}],
               "description": r["description"], "created_at": f"{r['created_at']}T10:00:00Z", "tags": ["demo", r["channel"].replace(" ", "_")],
-              "requester": {"name": f"Demo customer {r['ticket_id']}", "email": f"customer{r['ticket_id']}@capitalbank.example"}}
-             for r in rows[n:n + 100]]
+              "requester_id": me}
+             for r in rows[n:n + 30]]
     job = post(f"https://{sub}.zendesk.com/api/v2/imports/tickets/create_many", {"tickets": batch}).get("job_status", {})
     for _ in range(120):  # the import runs as a background job: wait for it and report what really happened
         st = call(job["url"]).get("job_status", {}) if job.get("url") else {}
@@ -91,8 +100,8 @@ for n in range(start, len(rows), 100):
           + (f" (first error: {str(failed[0])[:200]})" if failed else "") + (f" {st.get('message')}" if st.get("status") != "completed" else ""))
     if st.get("status") != "completed" or failed:
         sys.exit(f"stopped; fix the error above, then resume with: start {n}")
-    print(f"imported {min(n + 100, len(rows))} of {len(rows)} (to resume: start {min(n + 100, len(rows))})")
-    time.sleep(2)
+    print(f"imported {min(n + 30, len(rows))} of {len(rows)} (to resume: start {min(n + 30, len(rows))})")
+    time.sleep(20)
 print("connection for setup (an OAuth client of kind Confidential, its id and secret in .env):\n" + json.dumps({
     "id": "tickets", "type": "service", "label": "Zendesk tickets",
     "url": f"https://{sub}.zendesk.com/api/v2/tickets.json?sort_by=created_at&sort_order=desc&per_page=100&page={{page}}",
