@@ -1,0 +1,40 @@
+{
+  "_about": "This user's scope: the specific connections this profile reads, who receives the brief, its timezone and schedule. Filled in with the user during setup, confirmed by them, then locked. It can only narrow the use case scope (engine/scope.json), and a run can never change this file. The demo reads two generated files so it runs anywhere; in a live setup the same data comes from a Zendesk account and a BigQuery table (demo/load_zendesk.py, demo/load_warehouse.py). Quotes from internal data are allowed because the brief stays inside the company.",
+  "timezone": "Australia/Sydney",
+  "recipients": [
+    "priya.raman@capitalbank.example"
+  ],
+  "sources": [
+    {
+      "id": "tickets",
+      "type": "file",
+      "label": "Support tickets",
+      "file": "data/tickets.csv",
+      "columns": {
+        "id": "ticket_id",
+        "date": "created_at",
+        "title": "subject",
+        "text": "description"
+      },
+      "private": true,
+      "maxItems": 500
+    },
+    {
+      "id": "survey",
+      "type": "file",
+      "label": "In-app survey",
+      "file": "data/survey.csv",
+      "columns": {
+        "id": "response_id",
+        "date": "submitted_at",
+        "text": "comment",
+        "rating": "score"
+      },
+      "ratingScale": 10,
+      "private": true,
+      "maxItems": 500
+    }
+  ],
+  "privateQuotes": true,
+  "schedule": null
+}

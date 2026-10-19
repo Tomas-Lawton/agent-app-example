@@ -1,0 +1,45 @@
+{
+  "key": "demo",
+  "product": {
+    "name": "Capital Bank of Australia",
+    "description": "Retail bank (fictional company, generated demo data).",
+    "competitors": []
+  },
+  "reader": {
+    "name": "Priya Raman",
+    "role": "General Manager, Customer Experience"
+  },
+  "focus": {
+    "priorities": [
+      "declined cards and fraud blocks",
+      "login and security codes",
+      "delayed transfers",
+      "fees",
+      "scam reports"
+    ],
+    "urgent": [
+      "scams",
+      "lockouts",
+      "declined payments"
+    ],
+    "separate": "problems, requests and praise"
+  },
+  "windowDays": 7,
+  "delivery": "chat",
+  "wording": {
+    "briefName": "Weekly Customer Feedback Brief"
+  },
+  "locale": {
+    "dateLocale": "en-AU"
+  },
+  "theme": {
+    "brand": "#0b2545",
+    "brand2": "#13315c",
+    "accent": "#c9a227",
+    "ink": "#1b2430",
+    "muted": "#5f6b7a",
+    "line": "#e2e6ec",
+    "background": "#f4f6f9",
+    "tint": "#eef2f8"
+  }
+}

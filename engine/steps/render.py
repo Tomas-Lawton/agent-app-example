@@ -1,0 +1,377 @@
+"""Step 3: check the plan and the writing, then build the brief for the chat, a visual preview and an email.
+
+Usage (from the repository root, after writing brief_plan.json and live_content.json):  python3 engine/steps/render.py <key>
+
+Stops first if the plan or the writing fail a check (every quote a checked quote, every number traced, every action
+with a draft ticket). Then builds from the checked files only; the layout is fixed, a profile changes colours, icon
+and wording. Every theme and quote shows its source. Draws the feedback map (every item placed by similarity,
+coloured by the agent's theme) with matplotlib. Writes:
+  out/brief.md       the brief as markdown, for the chat of any harness
+  out/map.png        the feedback map
+  out/preview.html   the full visual brief, with copy buttons
+  out/email.html, out/email.txt, out/email.eml   the email
+The reader can email an action's owner, copy its draft ticket, jump to the evidence and open any source. Everything
+else is done by talking to the agent. Nothing is filed or posted for them.
+"""
+import os, sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # engine/
+import base64, datetime, glob, html, json, urllib.parse
+from email.message import EmailMessage
+from email.utils import format_datetime, make_msgid
+from core import config, checks
+
+cfg, info = config.open_run(config.key_arg())
+errors = checks.run(cfg, info, "plan", "content")
+if errors:
+    sys.exit("FIX brief_plan.json or live_content.json, then run render.py again:\n  " + "\n  ".join(errors))
+x = json.load(open("live_content.json"))
+S = json.load(open("summary.json"))
+items = {i["id"]: i for i in json.load(open("items.json"))["items"]}
+conns = {c["id"]: c for c in S.get("connections", [])}
+TH = cfg.get("theme") or {}
+BRAND, ACCENT = TH.get("brand", "#1f3a5f"), TH.get("accent", "#e07a2f")
+BRAND2 = TH.get("brand2", ACCENT)
+INK, MUTED, LINE, BG = TH.get("ink", "#111827"), TH.get("muted", "#6b7280"), TH.get("line", "#e5e7eb"), TH.get("background", "#f5f6f8")
+TINT = TH.get("tint", "#e9efe9")
+KIND = {"problem": TH.get("problem", "#c2410c"), "request": TH.get("request", "#2563eb"),
+        "praise": TH.get("praise", "#15803d"), "question": TH.get("question", "#7c3aed")}
+TREND = {"new": ("New", ACCENT), "growing": ("Growing", ACCENT), "rising": ("Rising this period", ACCENT), "easing": ("Easing", "#15803d")}
+NAME = cfg.get("wording", {}).get("briefName", "Customer feedback brief")
+PRODUCT = cfg.get("product", {})
+F = "font-family:-apple-system,'Segoe UI',Roboto,Arial,Helvetica,sans-serif;"
+e = lambda s: html.escape(str(s if s is not None else ""))
+themes_by_id = {t["id"]: t for t in S["themes"]}
+
+
+# ---------------------------------------------------------------- pieces
+def stars(r, scale):
+    if r is None or not scale:
+        return ""
+    n = round(r / scale * 5)
+    return f"<span style='color:{ACCENT}'>{'&#9733;' * n}</span><span style='color:{LINE}'>{'&#9733;' * (5 - n)}</span>"
+
+
+def pill(text, colour, solid=False):
+    style = f"background:{colour};color:#fff;" if solid else f"color:{colour};border:1px solid {colour};"
+    return (f"<span style='display:inline-block;{F}font-size:11px;font-weight:600;{style}border-radius:999px;"
+            f"padding:2px 9px;margin:0 6px 4px 0;text-transform:uppercase;letter-spacing:.4px'>{e(text)}</span>")
+
+
+def button(label, href, primary=False):
+    bg, fg, bd = (BRAND, "#ffffff", BRAND) if primary else ("#ffffff", BRAND, LINE)
+    return (f"<a href='{e(href)}' style='display:inline-block;{F}font-size:13px;font-weight:600;color:{fg};background:{bg};"
+            f"border:1px solid {bd};border-radius:8px;padding:7px 12px;margin:6px 6px 0 0;text-decoration:none'>{e(label)}</a>")
+
+
+def copy_button(text, preview, label="Copy"):
+    if not preview:
+        return ""
+    return (f"<button onclick=\"navigator.clipboard.writeText(this.dataset.t);this.textContent='Copied'\" data-t='{e(text)}' "
+            f"style='{F}font-size:13px;font-weight:600;color:#fff;background:{BRAND};border:0;border-radius:8px;padding:8px 12px;"
+            f"margin:6px 6px 0 0;cursor:pointer'>{e(label)}</button>")
+
+
+def source_label(sid):
+    c = conns.get(sid, {})
+    label = e(c.get("label") or sid)
+    return f"<a href='{e(c['link'])}' style='color:{BRAND}'>{label}</a>" if c.get("link") else label
+
+
+def card(inner, accent=None):
+    edge = f"border-left:4px solid {accent};" if accent else ""
+    return (f"<tr><td style='padding:8px 24px'><div style='background:#ffffff;border:1px solid {LINE};{edge}border-radius:12px;"
+            f"padding:16px 18px;box-shadow:0 1px 2px rgba(16,24,40,.05)'>{inner}</div></td></tr>")
+
+
+def section(title, sub=""):
+    sub = f"<div style='{F}font-size:13px;color:{MUTED};margin-top:2px'>{sub}</div>" if sub else ""
+    return (f"<tr><td style='padding:26px 24px 4px'><div style='{F}font-size:18px;font-weight:700;color:{INK}'>{e(title)}</div>{sub}</td></tr>")
+
+
+def stat(label, value, sub=""):
+    return (f"<td class='stat' width='25%' style='padding:14px 8px;text-align:center'>"
+            f"<div style='{F}font-size:24px;font-weight:700;color:{INK}'>{e(value)}</div>"
+            f"<div style='{F}font-size:11px;color:{MUTED};text-transform:uppercase;letter-spacing:.5px;margin-top:2px'>{e(label)}</div>"
+            f"<div style='{F}font-size:11px;color:{MUTED};margin-top:2px'>{sub}</div></td>")
+
+
+def delta(v, unit="", better="up"):
+    if v is None:
+        return "first edition"
+    if v == 0:
+        return "no change"
+    good = (v > 0) == (better == "up")
+    return f"<span style='color:{'#15803d' if good else '#c2410c'}'>{'+' if v > 0 else ''}{v:g}{unit} vs last run</span>"
+
+
+def quote(q):
+    it = items.get(q["item"], {})
+    meta = " &middot; ".join(filter(None, [source_label(it.get("source")), e(it.get("date")), stars(it.get("rating"), it.get("ratingScale"))]))
+    link = f" &middot; <a href='{e(it['url'])}' style='color:{BRAND}'>open</a>" if it.get("url") else ""
+    return (f"<div style='background:{BG};border-radius:10px;padding:10px 14px;margin:10px 0 0'>"
+            f"<div style='{F}font-size:14px;line-height:1.55;color:{INK}'>&ldquo;{e(q['text'])}&rdquo;</div>"
+            f"<div style='{F}font-size:12px;color:{MUTED};margin-top:4px'>{meta}{link}</div></div>")
+
+
+def mailto(a):
+    tk = a.get("ticket") or {}
+    body = f"{a['detail']}\n\nDraft ticket: {tk.get('title', '')}\n{tk.get('body', '')}\n\nFrom the {NAME} ({x['meta']['windowLabel']})."
+    return "mailto:?" + urllib.parse.urlencode({"subject": f"{NAME}: {a['title']}", "body": body}, quote_via=urllib.parse.quote)
+
+
+def ticket(a, preview):
+    tk = a.get("ticket") or {}
+    if not tk:
+        return ""
+    return (f"<div style='background:{TINT};border-radius:10px;padding:10px 12px;margin-top:10px'>"
+            f"<div style='{F}font-size:11px;color:{MUTED};text-transform:uppercase;letter-spacing:.5px'>Draft ticket, not filed</div>"
+            f"<div style='{F}font-size:14px;font-weight:700;color:{INK};margin-top:3px'>{e(tk.get('title'))}</div>"
+            f"<div style='{F}font-size:13px;line-height:1.55;color:{INK};margin-top:4px;white-space:pre-line'>{e(tk.get('body'))}</div>"
+            f"{copy_button(tk.get('title', '') + chr(10) + chr(10) + tk.get('body', ''), preview, 'Copy ticket')}</div>")
+
+
+# ---------------------------------------------------------------- the brief
+def volume_chart():
+    days = S["daily"]
+    top = max([d["count"] for d in days] + [1])
+    cols = []
+    for d in days:
+        h = max(2, round(110 * d["count"] / top))
+        r = f"{d['avgRating']}" if d["avgRating"] is not None else "&nbsp;"
+        cols.append(f"<td valign='bottom' align='center' style='padding:0 3px'>"
+                    f"<div style='{F}font-size:11px;color:{MUTED}'>{d['count']}</div>"
+                    f"<div style='height:{h}px;background:{BRAND};background-image:linear-gradient(180deg,{BRAND2},{BRAND});border-radius:6px 6px 0 0'></div>"
+                    f"<div style='{F}font-size:11px;color:{MUTED};margin-top:4px'>{d['date'][8:].lstrip('0')}</div>"
+                    f"<div style='{F}font-size:11px;color:{ACCENT}'>{r}</div></td>")
+    return (f"<div style='{F}font-size:13px;font-weight:600;color:{INK};margin-bottom:8px'>Feedback per day "
+            f"<span style='font-weight:400;color:{MUTED}'>(<span style='color:{ACCENT}'>average rating</span> below)</span></div>"
+            f"<table role='presentation' width='100%' cellpadding='0' cellspacing='0' style='table-layout:fixed'><tr>{''.join(cols)}</tr></table>")
+
+
+def themes_chart():
+    ts = S["themes"]
+    top = max([t["count"] for t in ts] + [1])
+    rows = "".join(
+        f"<tr><td width='40%' style='{F}font-size:12px;color:{INK};padding:4px 8px 4px 0'>{e(t['title'])}</td>"
+        f"<td style='padding:4px 0'><div style='width:{max(3, round(100 * t['count'] / top))}%;height:14px;border-radius:7px;"
+        f"background:{KIND.get(t['kind'], BRAND)}'></div></td>"
+        f"<td width='36' align='right' style='{F}font-size:12px;color:{MUTED}'>{t['count']}</td></tr>" for t in ts)
+    legend = " ".join(f"<span style='color:{c}'>&#9632; {k}</span>" for k, c in KIND.items())
+    return (f"<div style='{F}font-size:13px;font-weight:600;color:{INK};margin:20px 0 8px'>Items per theme</div>"
+            f"<table role='presentation' width='100%' cellpadding='0' cellspacing='0'>{rows}</table>"
+            f"<div style='{F}font-size:12px;color:{MUTED};margin-top:6px'>{legend}</div>")
+
+
+def body(preview, img):
+    t, ch = S["totals"], S.get("change") or {}
+    icon = PRODUCT.get("iconUrl")
+    icon_td = (f"<td width='64' valign='middle'><img src='{e(icon)}' width='52' height='52' alt='' "
+               f"style='display:block;border-radius:12px;border:2px solid rgba(255,255,255,.6)'/></td>") if icon else ""
+    rows = [
+        f"<tr><td bgcolor='{BRAND}' style='background:{BRAND};background-image:linear-gradient(135deg,{BRAND} 0%,{BRAND2} 100%);padding:26px 24px'>"
+        f"<table role='presentation' width='100%' cellpadding='0' cellspacing='0'><tr>{icon_td}<td valign='middle'>"
+        f"<div style='{F}font-size:12px;color:#ffffff;opacity:.9;text-transform:uppercase;letter-spacing:1px'>{e(PRODUCT.get('name'))}</div>"
+        f"<div style='{F}font-size:26px;font-weight:700;color:#ffffff;margin-top:2px'>{e(NAME)}</div>"
+        f"<div style='{F}font-size:13px;color:#ffffff;opacity:.9;margin-top:4px'>{e(x['meta']['dateLabel'])} &middot; feedback from {e(x['meta']['windowLabel'])}</div>"
+        f"</td></tr></table></td></tr>",
+        f"<tr><td style='padding:22px 24px 4px'><div style='{F}font-size:18px;line-height:1.5;color:{INK}'>{e(x['headline'])}</div></td></tr>",
+        f"<tr><td style='padding:14px 24px 0'><table role='presentation' width='100%' cellpadding='0' cellspacing='0' "
+        f"style='background:#ffffff;border:1px solid {LINE};border-radius:12px'><tr>"
+        + stat("Items", t["items"], delta(ch.get("items"), better="none") if ch else "first edition")
+        + stat("Avg rating", t["avgRating"] if t["avgRating"] is not None else "n/a", delta(ch.get("avgRating")) if ch else "")
+        + stat("1 or 2 stars", f"{t['lowShare']}%" if t["lowShare"] is not None else "n/a", delta(ch.get("lowShare"), " pts", better="down") if ch else "")
+        + stat("Connections", f"{S['sources']['ok']} of {sum(S['sources'].values())}", f"{S['sources']['blocked']} blocked" if S["sources"]["blocked"] else "all read")
+        + "</tr></table></td></tr>",
+    ]
+    chips = []
+    for c in S.get("connections", []):
+        ok = c["status"] == "ok"
+        tail = f"{c.get('kept', 0)} items" if ok else c["status"]
+        lock = " &middot; private" if c.get("private") else ""
+        chips.append(f"<span style='display:inline-block;{F}font-size:12px;color:{INK if ok else '#c2410c'};background:#ffffff;"
+                     f"border:1px solid {LINE};border-radius:999px;padding:4px 10px;margin:8px 6px 0 0'>"
+                     f"{source_label(c['id'])} &middot; {e(c['type'])} &middot; {e(tail)}{lock}</span>")
+    rows.append(f"<tr><td style='padding:6px 24px 0'><span style='{F}font-size:12px;color:{MUTED}'>Read from:</span> {''.join(chips)}</td></tr>")
+    if S.get("capped"):
+        rows.append(f"<tr><td style='padding:8px 24px 0'><div style='{F}font-size:12px;color:{MUTED}'>Read the {t['items']} most recent items in the window.</div></td></tr>")
+
+    if x.get("actions"):
+        rows.append(section("Things to act on", "Ranked by impact, reach and growth"))
+        for n, a in enumerate(x["actions"], 1):
+            rows.append(card(
+                f"<table role='presentation' width='100%' cellpadding='0' cellspacing='0'><tr>"
+                f"<td width='40' valign='top'><div style='{F}width:30px;height:30px;border-radius:15px;background:{ACCENT};color:#fff;"
+                f"font-weight:700;font-size:15px;line-height:30px;text-align:center'>{n}</div></td>"
+                f"<td valign='top'><div style='{F}font-size:16px;font-weight:700;color:{INK}'>{e(a['title'])}</div>"
+                f"<div style='{F}font-size:14px;line-height:1.55;color:{INK};margin-top:4px'>{e(a['detail'])}</div>"
+                f"<div style='{F}font-size:12px;color:{MUTED};margin-top:6px'>Owner: {e(a['owner'])}</div>"
+                + ticket(a, preview)
+                + f"<div>{button('Email the owner', mailto(a), primary=True)}{button('See the evidence', '#' + a['theme'])}</div>"
+                f"</td></tr></table>"))
+
+    rows.append(section("At a glance"))
+    rows.append(card(volume_chart() + themes_chart()))
+    if img("map.png"):
+        rows.append(card(f"<div style='{F}font-size:13px;font-weight:600;color:{INK};margin-bottom:8px'>Feedback map</div>"
+                         f"<img src='{img('map.png')}' width='544' alt='Every item placed by similarity, coloured by theme' style='width:100%;height:auto;display:block'/>"
+                         f"<div style='{F}font-size:12px;color:{MUTED};margin-top:6px'>Each dot is one piece of feedback, placed near similar feedback "
+                         f"(K-means on word vectors) and coloured by theme. Grey dots fit no theme.</div>"))
+
+    rows.append(section("What customers are saying", "Every quote is word for word, with its source"))
+    for th in x["themes"]:
+        s = themes_by_id[th["id"]]
+        trend = pill(*TREND[s["trend"]]) if s["trend"] in TREND else ""
+        rating = f" &middot; average rating {s['avgRating']}" if s["avgRating"] is not None else ""
+        size = f"{s['count']} items &middot; {s['share']}% of all feedback &middot; {s['firstHalf']} then {s['secondHalf']} across the period"
+        prev = f" &middot; {s['previousShare']}% last run" if s.get("previousShare") is not None else ""
+        srcs = " &middot; ".join(f"{source_label(k)} {v}" for k, v in (s.get("sources") or {}).items())
+        rows.append(card(
+            f"<a name='{e(th['id'])}' id='{e(th['id'])}'></a><div>{pill(s['kind'], KIND.get(s['kind'], BRAND), solid=True)}{trend}</div>"
+            f"<div style='{F}font-size:17px;font-weight:700;color:{INK};margin-top:4px'>{e(th['title'])}</div>"
+            f"<div style='{F}font-size:12px;color:{MUTED};margin-top:3px'>{size}{prev}{rating}</div>"
+            f"<div style='{F}font-size:14px;line-height:1.55;color:{INK};margin-top:8px'>{e(th['summary'])}</div>"
+            + "".join(quote(q) for q in th["quotes"])
+            + f"<div style='{F}font-size:12px;color:{MUTED};margin-top:10px'>Sources: {srcs}</div>",
+            accent=KIND.get(s["kind"], BRAND)))
+
+    rows.append(section("Ask your agent"))
+    rows.append(card(f"<div style='{F}font-size:14px;line-height:1.7;color:{INK}'>"
+                     "Reply in your agent to go further, for example:<br/>"
+                     "&ldquo;File ticket 1 in Jira&rdquo; &middot; &ldquo;Why is the top theme growing?&rdquo; &middot; "
+                     "&ldquo;Show me everything about it&rdquo; &middot; &ldquo;Make the brief shorter&rdquo; &middot; "
+                     "&ldquo;Add a connection&rdquo;</div>"))
+
+    srcs = []
+    for c in S.get("connections", []):
+        tail = f"{c.get('kept', 0)} items" if c["status"] == "ok" else f"{c['status']}: {c.get('reason', '')}"
+        if c.get("note"):
+            tail += f" ({c['note']})"
+        srcs.append(f"{source_label(c['id'])}{' (private)' if c.get('private') else ''}: {e(tail)}")
+    rows.append(
+        f"<tr><td style='padding:22px 24px 26px'><div style='{F}font-size:12px;line-height:1.65;color:{MUTED}'>"
+        f"<b>Sources.</b> {'; '.join(srcs)}.<br/>{e(x['footer'])}<br/>"
+        f"Written by an AI agent. Every quote was checked word for word against the collected feedback, every number was "
+        f"computed by code, and private feedback is described but never quoted. Names, emails and reference numbers are "
+        f"removed before anything is written.</div></td></tr>")
+    return "".join(rows)
+
+
+def page(img, preview=False):
+    css = ("@media (max-width:620px){.wrap{width:100%!important}.stat{display:block!important;width:100%!important;"
+           "border-bottom:1px solid " + LINE + "}}")
+    strip = ""
+    if preview:
+        strip = (f"<div style='{F}max-width:640px;margin:0 auto 12px;font-size:12px;color:{MUTED}'>"
+                 f"<b>Subject:</b> {e(x['subject'])}<br/><b>To:</b> {e(cfg['recipient'])} &middot; "
+                 f"<b>Preview line:</b> {e(x['preheader'])}</div>")
+    return (f"<!doctype html><html><head><meta charset='utf-8'/><meta name='viewport' content='width=device-width,initial-scale=1'/>"
+            f"<title>{e(x['subject'])}</title><style>{css}</style></head>"
+            f"<body style='margin:0;padding:24px 0;background:{BG};background-image:linear-gradient(180deg,{TINT} 0px,{BG} 420px)'>{strip}"
+            f"<div style='display:none;max-height:0;overflow:hidden'>{e(x['preheader'])}</div>"
+            f"<table role='presentation' class='wrap' width='640' align='center' cellpadding='0' cellspacing='0' "
+            f"style='width:640px;max-width:640px;margin:0 auto;background:{BG};border-radius:16px;overflow:hidden;"
+            f"box-shadow:0 10px 30px rgba(16,24,40,.08)'>{body(preview, img)}</table></body></html>")
+
+
+def text():
+    out = [NAME, f"{x['meta']['dateLabel']}, feedback from {x['meta']['windowLabel']}", "", x["headline"], ""]
+    for n, a in enumerate(x.get("actions") or [], 1):
+        out += [f"{n}. {a['title']}", f"   {a['detail']}", f"   Owner: {a['owner']}"]
+    for th in x["themes"]:
+        s = themes_by_id[th["id"]]
+        out += ["", f"* {th['title']} ({s['count']} items, {s['share']}%)", f"  {th['summary']}"]
+        out += [f"  \"{q['text']}\" ({items.get(q['item'], {}).get('sourceLabel', '')})" for q in th["quotes"]]
+    for a in x.get("actions") or []:
+        tk = a.get("ticket") or {}
+        out += ["", f"Draft ticket: {tk.get('title', '')}", tk.get("body", "")]
+    out += ["", x["footer"]]
+    return "\n".join(out)
+
+
+def markdown():
+    t, ch = S["totals"], S.get("change") or {}
+    out = [f"# {NAME}", f"*{PRODUCT.get('name', '')} · {x['meta']['dateLabel']} · feedback from {x['meta']['windowLabel']}*", "", x["headline"], ""]
+    nums = [f"**{t['items']}** items"]
+    if t["avgRating"] is not None:
+        nums.append(f"average rating **{t['avgRating']}**" + (f" ({ch['avgRating']:+g} vs last week)" if ch.get("avgRating") else ""))
+    if t["lowShare"] is not None:
+        nums.append(f"**{t['lowShare']}%** at one or two stars")
+    reads = ", ".join(f"[{c['label']}]({c['link']})" if c.get("link") else c["label"] for c in S.get("connections", []))
+    out += [" · ".join(nums), f"Read from: {reads}", ""]
+    if os.path.exists("out/map.png"):
+        out += ["![Feedback map](map.png)", ""]
+    if x.get("actions"):
+        out += ["## Things to act on", ""]
+        for n, a in enumerate(x["actions"], 1):
+            tk = a.get("ticket") or {}
+            out += [f"{n}. **{a['title']}** {a['detail']} *Owner: {a['owner']}*", f"   > **Draft ticket: {tk.get('title', '')}**  ", f"   > {tk.get('body', '')}"]
+        out.append("")
+    out += ["## What customers are saying", ""]
+    for th in x["themes"]:
+        s = themes_by_id[th["id"]]
+        trend = f" · {TREND[s['trend']][0]}" if s["trend"] in TREND else ""
+        srcs = ", ".join(f"{conns.get(k, {}).get('label', k)} {v}" for k, v in (s.get("sources") or {}).items())
+        size = f"{s['count']} items · {s['share']}% of feedback"
+        out += [f"### {th['title']}", f"*{s['kind']} · {size}{trend} · sources: {srcs}*", "", th["summary"], ""]
+        for q in th["quotes"]:
+            it = items.get(q["item"], {})
+            src = f"[{it.get('sourceLabel', '')}]({it['url']})" if it.get("url") else it.get("sourceLabel", "")
+            out += [f"> \u201c{q['text']}\u201d", f"> \u2014 {src}, {it.get('date', '')}", ""]
+    out += ["---", x["footer"]]
+    return "\n".join(out)
+
+
+# ---------------------------------------------------------------- write
+def draw_map():
+    """Every item at its position from cluster.py, coloured by its first kept theme."""
+    if not os.path.exists("clusters.json"):
+        return False
+    try:
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+    except ImportError:
+        print("matplotlib is missing, so the brief has no map; install it with: python3 -m pip install -r requirements.txt")
+        return False
+    pos = json.load(open("clusters.json"))["positions"]
+    tags = {}
+    for p in sorted(glob.glob("tags/part_*.json")):
+        tags.update(json.load(open(p)))
+    shown = [th["id"] for th in x["themes"]]
+    palette = [BRAND, ACCENT, "#c2410c", "#7c3aed", "#15803d", "#0891b2", "#be185d", "#4d7c0f"]
+    colour = {tid: palette[n % len(palette)] for n, tid in enumerate(shown)}
+    fig, ax = plt.subplots(figsize=(8, 4.6), dpi=150)
+    for tid in [None] + shown:
+        pts = [pos[i] for i in pos if (next((t for t in (tags.get(i) or []) if t in colour), None)) == tid]
+        if pts:
+            ax.scatter([p[0] for p in pts], [p[1] for p in pts], s=14 if tid else 8, alpha=.85 if tid else .35,
+                       color=colour.get(tid, "#b8c0c8"), label=themes_by_id[tid]["title"][:40] if tid else "No theme", linewidths=0)
+    ax.set_xticks([]); ax.set_yticks([])
+    for side in ax.spines.values():
+        side.set_visible(False)
+    ax.legend(loc="center left", bbox_to_anchor=(1, .5), frameon=False, fontsize=8)
+    fig.tight_layout()
+    fig.savefig("out/map.png", facecolor="white")
+    plt.close(fig)
+    return True
+
+
+os.makedirs("out", exist_ok=True)
+has_map = draw_map()
+cid = make_msgid(domain="brief.local")[1:-1]
+uri = lambda name: ("data:image/png;base64," + base64.b64encode(open(f"out/{name}", "rb").read()).decode()) if has_map and name == "map.png" else ""
+open("out/brief.md", "w").write(markdown())
+open("out/preview.html", "w").write(page(uri, preview=True))
+html_part = page(lambda name: f"cid:{cid}" if has_map and name == "map.png" else "")
+open("out/email.html", "w").write(html_part)
+open("out/email.txt", "w").write(text())
+m = EmailMessage()
+m["Subject"], m["To"] = x["subject"], cfg["recipient"]
+m["Date"] = format_datetime(datetime.datetime.now().astimezone())
+m.set_content(text())
+m.add_alternative(html_part, subtype="html")
+if has_map:
+    m.get_payload()[1].add_related(open("out/map.png", "rb").read(), "image", "png", cid=f"<{cid}>", disposition="inline", filename="map.png")
+open("out/email.eml", "wb").write(bytes(m))
+print(f"wrote {info['folder']}/out/brief.md, preview.html and email.eml" + (" with the feedback map" if has_map else ""))
+print(f"preview: {os.path.abspath('out/preview.html')}")
