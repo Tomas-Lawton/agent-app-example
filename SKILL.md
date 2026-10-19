@@ -9,6 +9,12 @@ description: Runs a customer feedback brief for a profile in profiles/<key>/ - w
 
 **Rules.** Collect only through `collect.py`: no web search or other sources, and if a connection is blocked, report it and never try another way round. Quote word for word; never quote private items (warehouse data, items marked private) unless the user scope sets `privateQuotes`. Take every number from `summary.json`. Never file or post anything: tickets are drafts for a person. Say when evidence is thin or the period was quiet. When a script stops, fix what it names and run it again.
 
+## Before the first run
+Check the tools once per machine, and install anything missing yourself:
+- **Python 3.9 or newer:** `python3 --version`.
+- **The packages in `requirements.txt`** (scikit-learn and matplotlib, for clustering and the map): `python3 -c "import sklearn, matplotlib"`. If that fails, run `python3 -m pip install -r requirements.txt`. If pip refuses because the system Python is managed, make a virtual environment in the project root, `python3 -m venv .venv && .venv/bin/pip install -r requirements.txt`, and use `.venv/bin/python3` instead of `python3` in every command below.
+- Everything else is the Python standard library. A warehouse connection also needs Google credentials, which setup arranges.
+
 ## Steps
 Run every command from the repository root. Write your files in the run folder that step 1 prints. For the demo, first run `python3 demo/make_data.py` to refresh its data.
 
