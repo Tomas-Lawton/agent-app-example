@@ -291,36 +291,33 @@ def text():
 
 
 def markdown():
+    """The same order as the email: summary, map, charts as numbers, themes, then actions with their tickets."""
     t, ch = S["totals"], S.get("change") or {}
     out = [f"# {NAME}", f"*{PRODUCT.get('name', '')} · {x['meta']['dateLabel']} · feedback from {x['meta']['windowLabel']}*", "", x["headline"], ""]
     nums = [f"**{t['items']}** items"]
     if t["avgRating"] is not None:
-        nums.append(f"average rating **{t['avgRating']}**" + (f" ({ch['avgRating']:+g} vs last week)" if ch.get("avgRating") else ""))
+        nums.append(f"average rating **{t['avgRating']}**" + (f" ({ch['avgRating']:+g} vs last run)" if ch.get("avgRating") else ""))
     if t["lowShare"] is not None:
-        nums.append(f"**{t['lowShare']}%** at one or two stars")
+        nums.append(f"**{t['lowShare']}%** at the lowest ratings")
     reads = ", ".join(f"[{c['label']}]({c['link']})" if c.get("link") else c["label"] for c in S.get("connections", []))
     out += [" · ".join(nums), f"Read from: {reads}", ""]
     if os.path.exists("out/map.png"):
         out += ["![Feedback map](map.png)", ""]
-    if os.path.exists("out/map.png"):
-        out += ["![Feedback map](map.png)", ""]
-    if x.get("actions"):
-        out += ["## Things to act on", ""]
-        for n, a in enumerate(x["actions"], 1):
-            tk = a.get("ticket") or {}
-            out += [f"{n}. **{a['title']}** {a['detail']} *Owner: {a['owner']}*", f"   > **Draft ticket: {tk.get('title', '')}**  ", f"   > {tk.get('body', '')}"]
-        out.append("")
     out += ["## What customers are saying", ""]
     for th in x["themes"]:
         s = themes_by_id[th["id"]]
         trend = f" · {TREND[s['trend']][0]}" if s["trend"] in TREND else ""
         srcs = ", ".join(f"{conns.get(k, {}).get('label', k)} {v}" for k, v in (s.get("sources") or {}).items())
-        size = f"{s['count']} items · {s['share']}% of feedback"
-        out += [f"### {th['title']}", f"*{s['kind']} · {size}{trend} · sources: {srcs}*", "", th["summary"], ""]
+        out += [f"### {th['title']}", f"*{s['kind']} · {s['count']} items · {s['share']}% of feedback{trend} · sources: {srcs}*", "", th["summary"], ""]
         for q in th["quotes"]:
             it = items.get(q["item"], {})
             src = f"[{it.get('sourceLabel', '')}]({it['url']})" if it.get("url") else it.get("sourceLabel", "")
             out += [f"> \u201c{q['text']}\u201d", f"> \u2014 {src}, {it.get('date', '')}", ""]
+    if x.get("actions"):
+        out += ["## Things to act on", ""]
+        for n, a in enumerate(x["actions"], 1):
+            tk = a.get("ticket") or {}
+            out += [f"{n}. **{a['title']}** {a['detail']} *Owner: {a['owner']}*", f"   > **Draft ticket: {tk.get('title', '')}**  ", f"   > {tk.get('body', '')}", ""]
     out += ["---", x["footer"]]
     return "\n".join(out)
 
