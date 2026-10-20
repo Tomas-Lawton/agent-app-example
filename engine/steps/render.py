@@ -581,7 +581,7 @@ def page(img, preview=False):
     return (f"<!doctype html><html><head><meta charset='utf-8'/><meta name='viewport' content='width=device-width,initial-scale=1'/>"
             f"<title>{e(x['subject'])}</title><style>{css}</style>{COPY_JS if preview else ''}</head>"
             f"<body style='margin:0;padding:24px 0;min-height:100vh;background:{DEEP};"
-            f"background-image:linear-gradient(180deg,{DEEP} 0%,{mix(DEEP, BRAND, .5)} 70%,{mix(BRAND, ACCENT, .12)} 100%);background-attachment:fixed'>{strip}"
+            f"background-image:linear-gradient(135deg,{DEEP} 0%,{mix(DEEP, BRAND, .5)} 70%,{mix(BRAND, ACCENT, .12)} 100%);background-attachment:fixed'>{strip}"
             f"<div style='display:none;max-height:0;overflow:hidden'>{e(x['preheader'])}</div>"
             + (f"<table role='presentation' class='wrap' width='100%' align='center' cellpadding='0' cellspacing='0' "
                f"style='width:92%;max-width:1100px;margin:0 auto;background:{BG};border-radius:16px;overflow:hidden;"
