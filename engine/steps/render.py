@@ -248,13 +248,15 @@ def body(preview, img):
     chips = []
     for c in S.get("connections", []):
         ok = c["status"] == "ok"
-        tail = f"{c.get('kept', 0)} items" if ok else c["status"]
+        tail = f"{c.get('collected', c.get('kept', 0))} items" if ok else c["status"]
         lock = " &middot; private" if c.get("private") else ""
         chips.append(f"<span style='display:inline-block;margin:8px 4px 0 0'>{source_tag(c['id'])}"
                      f"<span style='{F}font-size:12px;color:{INK if ok else '#c2410c'}'>{e(c['type'])} &middot; {e(tail)}{lock}</span></span>")
     rows.append(f"<tr><td style='padding:6px 24px 0'><span style='{F}font-size:12px;color:{MUTED}'>Read from:</span> {''.join(chips)}</td></tr>")
     if S.get("capped"):
-        rows.append(f"<tr><td style='padding:8px 24px 0'><div style='{F}font-size:12px;color:{MUTED}'>Read the {t['items']} most recent items in the window.</div></td></tr>")
+        cv = S["coverage"]
+        rows.append(f"<tr><td style='padding:8px 24px 0'><div style='{F}font-size:12px;color:{MUTED}'>The numbers above count all {cv['collected']} items in the window. "
+                    f"Themes come from the newest {cv['analysed']}, from {e(cv['from'])} to {e(cv['until'])}.</div></td></tr>")
 
     if img("map.png"):
         rows.append(section("Feedback map", "Each dot is one piece of feedback, placed near similar feedback and coloured by theme"))
@@ -407,6 +409,9 @@ def markdown():
         nums.append(f"**{t['lowShare']}%** at the lowest ratings")
     reads = ", ".join(f"[{c['label']}]({c['link']})" if c.get("link") else c["label"] for c in S.get("connections", []))
     out += [" · ".join(nums), f"Read from: {reads}", ""]
+    if S.get("capped"):
+        cv = S["coverage"]
+        out += [f"*The numbers count all {cv['collected']} items in the window. Themes come from the newest {cv['analysed']}, from {cv['from']} to {cv['until']}.*", ""]
     if os.path.exists("out/map.png"):
         out += ["![Feedback map](map.png)", ""]
     out += ["## What customers are saying", ""]

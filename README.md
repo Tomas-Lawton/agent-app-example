@@ -38,7 +38,7 @@ Each run is four steps. The agent does the judgement; a script ends each step, d
 
 | Step | The agent | The scripts |
 |---|---|---|
-| 1. Collect | | `collect.py` reads every approved connection, removes emails, phone numbers and reference numbers, drops duplicates and keeps the **most recent 500 items**. `cluster.py` groups similar items with **K-means** on word vectors and lays them out for the map |
+| 1. Collect | | `collect.py` reads every approved connection, removes emails, phone numbers and reference numbers, drops duplicates and keeps the **most recent 500 items** for the agent to read. The headline numbers count everything in the window; if there were more than 500, the brief says which dates the themes cover, and trends compare halves of those dates. `cluster.py` groups similar items with **K-means** on word vectors and lays them out for the map |
 | 2. Read, theme and tag | reads every item, cluster by cluster, writes the themes, then **tags every item** in chunks of 100 | `summarise.py` checks every item is tagged, counts each theme exactly, computes trends and scores, and checks every quote is word for word |
 | 3. Plan and write | picks up to three actions, writes the brief and a draft ticket for each | `render.py` checks the writing against the counts, draws the map, and builds the chat, preview and email versions |
 | 4. Present | shows the brief and handles your replies | `send.py` reruns every check and emails only the approved recipient |

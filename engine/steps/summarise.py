@@ -35,8 +35,11 @@ if missing:
              "Tag every item in tags/part_NN.json, using [] when no theme fits, then run summarise.py again.")
 
 N = len(items) or 1
+meta = json.load(open("items.json"))
+window = json.load(open("window.json")) if os.path.exists("window.json") else items  # everything collected in the window
 since, until = datetime.date.fromisoformat(info["since"]), datetime.date.fromisoformat(info["until"])
-mid = since + (until - since) / 2
+covered = max(since, datetime.date.fromisoformat(meta.get("coverageFrom") or info["since"]))  # the dates the agent read
+mid = covered + (until - covered) / 2  # trends inside the run compare halves of the covered dates, never empty days
 
 
 def five(it):
@@ -94,9 +97,9 @@ json.dump(data, open("themes.json", "w"), indent=2, ensure_ascii=False)
 daily = []
 for n in range((until - since).days + 1):
     d = (since + datetime.timedelta(days=n)).isoformat()
-    day = [i for i in items if i["date"] == d]
+    day = [i for i in window if i["date"] == d]
     daily.append({"date": d, "count": len(day), "avgRating": stats(day)["avgRating"]})
-totals = {"items": len(items), **stats(items)}
+totals = {"items": len(window), "analysed": len(items), **stats(window)}
 change = None
 if prev_sum:
     p = prev_sum["totals"]
@@ -108,13 +111,14 @@ untagged = sum(1 for tids in tags.values() if not set(tids) & kept_ids)
 kept = sorted((t for t in data["themes"] if t.get("decision") == "keep"), key=lambda t: -t["computed"]["score"])
 summary = {
     "date": info["date"], "window": {"since": info["since"], "until": info["until"], "label": info["windowLabel"]},
-    "totals": totals, "capped": json.load(open("items.json")).get("capped", False),
+    "totals": totals, "capped": meta.get("capped", False),
+    "coverage": {"from": covered.isoformat(), "until": info["until"], "analysed": len(items), "collected": len(window)},
     "untaggedShare": round(100 * untagged / N), "previous": prev_sum["date"] if prev_sum else None, "change": change, "daily": daily,
     "themes": [{"id": t["id"], "title": t["title"], "kind": t.get("kind"),
                 **{k: t["computed"][k] for k in ("count", "share", "avgRating", "lowShare", "trend", "firstHalf", "secondHalf", "previousShare", "score", "sources")}}
                for t in kept],
     "sources": {st: sum(e["status"] == st for e in log["sources"]) for st in ("ok", "blocked", "error")},
-    "connections": [{k: e.get(k) for k in ("id", "label", "type", "status", "kept", "private", "link", "reason", "note")} for e in log["sources"]],
+    "connections": [{k: e.get(k) for k in ("id", "label", "type", "status", "kept", "collected", "private", "link", "reason", "note")} for e in log["sources"]],
 }
 json.dump(summary, open("summary.json", "w"), indent=2, ensure_ascii=False)
 for t in kept:

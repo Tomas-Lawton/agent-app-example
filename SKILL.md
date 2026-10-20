@@ -18,7 +18,7 @@ Check the tools once per machine, and install anything missing yourself:
 ## Steps
 Run every command from the repository root. When you need anything the scripts don't do, such as a count for a follow-up question or reading an odd file, write a small throwaway program in the run folder, run it, and delete it; never add it to `engine/`. Write your files in the run folder that step 1 prints.
 
-**1. Collect.** `python3 engine/steps/collect.py <key>`. It reads the user's connections (the most recent 500 items in the window), groups similar items, and writes `reading/part_NN.txt`: every item, cluster by cluster, one line each (`id | date | rating | text`).
+**1. Collect.** `python3 engine/steps/collect.py <key>`. It reads the user's connections (the most recent 500 items in the window for you to read; if there were more, `summary.json` → `coverage` says which dates the 500 cover, the headline numbers still count everything, and the brief says so), groups similar items, and writes `reading/part_NN.txt`: every item, cluster by cluster, one line each (`id | date | rating | text`).
 
 **2. Read, theme and tag.**
 - Read **every** part in `reading/`, in order. Items arrive grouped with similar items, so form themes cluster by cluster; a theme can span clusters, and a cluster can hold more than one theme.
@@ -51,7 +51,7 @@ Run every command from the repository root. When you need anything the scripts d
  "actions": [{"theme": "cards-declined", "title": "Reduce false fraud declines", "detail": "One or two sentences, each cited [tickets-012].", "owner": "...",
    "ticket": {"title": "False declines on everyday card purchases since Thursday", "body": "What is happening [tickets-012, survey-087]. What to check first [tickets-031]."}}],
  "themes": [{"id": "cards-declined", "title": "...", "summary": "Each sentence ends with its citations [tickets-012, tickets-019].", "quotes": [{"item": "tickets-012", "text": "..."}]}],
- "footer": "Anything the reader should know about the evidence: a blocked connection, a capped or partly covered window."}
+ "footer": "Anything the reader should know about the evidence: a blocked connection, a partly covered window."}
 ```
 
 **4. Present.** Follow the `output` setting in `PROFILE.md`. **chat:** show `out/brief.md` in the chat and offer `out/preview.html`. **email:** run `python3 engine/steps/send.py <key>` and give a short summary. If it prints BLOCKED or NOT SET UP, report that and stop; there is no other way to send. **both:** both. A scheduled run stops after step 3; the job runs the send gate itself. Finish in five lines or fewer: connections read or blocked, the actions, gaps in the evidence. If your harness reports token usage, write it to `usage.json` in the run folder (`{"inputTokens": 0, "outputTokens": 0}`) and render again, so `metrics.json` records the cost.
