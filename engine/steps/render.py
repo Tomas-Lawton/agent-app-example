@@ -334,6 +334,23 @@ def ticket_text(body):
 
 
 # ---------------------------------------------------------------- the brief
+def sources_chart():
+    """Items from each connection: where this period's feedback came from."""
+    conns = [c for c in S.get("connections", []) if c.get("status") == "ok"]
+    counts = {c["id"]: c.get("collected", c.get("kept", 0)) for c in conns}
+    total = sum(counts.values()) or 1
+    rows = "".join(
+        f"<tr><td width='45%' style='{F}font-size:12px;color:{INK};padding:3px 8px 3px 0'>{source_tag(c['id'])}{e(c.get('label') or c['id'])}</td>"
+        f"<td style='padding:3px 0'><div style='width:{max(2, round(100 * counts[c['id']] / total))}%;height:12px;border-radius:6px;background:{BRAND2}'></div></td>"
+        f"<td width='44' align='right' style='{F}font-size:12px;color:{MUTED}'>{counts[c['id']]}</td></tr>"
+        for c in conns
+    )
+    return (
+        f"<div style='{F}font-size:13px;font-weight:600;color:{INK};margin:0 0 8px'>Where it came from</div>"
+        f"<table role='presentation' width='100%' cellpadding='0' cellspacing='0'>{rows}</table>"
+    )
+
+
 def mix_chart():
     """How ratings are spread across the window, 5 stars to 1: an average can hide a split between love and hate."""
     mix = S.get("ratingMix")
@@ -449,7 +466,7 @@ def body(preview, img):
     rows = [
         f"<tr><td bgcolor='{BRAND}' background='{img('header.png')}' style='background:{BRAND};background-image:"
         + (f"url({img('header.png')})" if img("header.png") else f"linear-gradient(135deg,{BRAND} 0%,{BRAND2} 100%)")
-        + f";background-size:cover;background-position:center;padding:34px 24px'>"
+        + f";background-size:cover;background-position:center;padding:52px 28px'>"
         f"<table role='presentation' width='100%' cellpadding='0' cellspacing='0'><tr>{icon_td}<td valign='middle'>"
         f"<div style='{F}font-size:12px;color:#ffffff;opacity:.9;text-transform:uppercase;letter-spacing:1px'>{e(PRODUCT.get('name'))}</div>"
         f"<div style='{F}font-size:26px;font-weight:700;color:#ffffff;margin-top:2px'>{e(NAME)}</div>"
@@ -515,7 +532,7 @@ def body(preview, img):
         )
         rows.append(
             card(
-                f"<img src='{img('map.png')}' width='544' alt='Every item placed by similarity, coloured by theme' style='width:100%;height:auto;display:block'/>"
+                f"<img src='{img('map.png')}' width='712' alt='Every item placed by similarity, coloured by theme' style='width:100%;height:auto;display:block'/>"
                 f"<div style='{F}font-size:12px;line-height:1.5;color:{MUTED};margin-top:6px'><b>How the map is made:</b> code turns each piece of "
                 f"feedback into numbers from the words it uses (TF-IDF), compresses them so words that tend to appear together count as "
                 f"related (LSA), groups similar items with K-means so the agent reads them together, and flattens everything onto two "
@@ -524,7 +541,7 @@ def body(preview, img):
             )
         )
     rows.append(section("At a glance"))
-    left = [box(volume_chart())] + ([box(mix_chart())] if mix_chart() else [])
+    left = [box(volume_chart()), box(mix_chart() or sources_chart())]
     rows.append(split(left, box(themes_chart())))
     if ratings_chart():
         rows.append(card(ratings_chart()))
@@ -573,7 +590,7 @@ def body(preview, img):
         rows.append(section("Where to focus", "Each theme by how many customers it reaches and how much it hurts them"))
         rows.append(
             card(
-                f"<img src='{img('matrix.png')}' width='544' alt='Themes by reach and impact' style='width:100%;height:auto;display:block'/>"
+                f"<img src='{img('matrix.png')}' width='712' alt='Themes by reach and impact' style='width:100%;height:auto;display:block'/>"
                 f"<div style='{F}font-size:12px;color:{MUTED};margin-top:6px'>Reach is counted by code; impact is the agent's judgement "
                 f"(0 to 3, with ease of acting nudging it up). Top right is where to act first.</div>"
             )
@@ -753,8 +770,8 @@ def page(img, preview=False):
             f"<table role='presentation' class='wrap' width='100%' align='center' cellpadding='0' cellspacing='0' "
             f"style='width:92%;max-width:1100px;margin:0 auto;background:{BG};border-radius:16px;overflow:hidden;"
             if preview
-            else f"<table role='presentation' class='wrap' width='640' align='center' cellpadding='0' cellspacing='0' "
-            f"style='width:640px;max-width:640px;margin:0 auto;background:{BG};border-radius:16px;overflow:hidden;"
+            else f"<table role='presentation' class='wrap' width='760' align='center' cellpadding='0' cellspacing='0' "
+            f"style='width:760px;max-width:100%;margin:0 auto;background:{BG};border-radius:16px;overflow:hidden;"
         )
         + f"box-shadow:0 24px 60px rgba(0,0,0,.35),0 4px 14px rgba(0,0,0,.18)'>{body(preview, img)}</table></body></html>"
     )

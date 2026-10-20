@@ -84,6 +84,7 @@
     "minEvidence": 2,
     "maxQuotesPerTheme": 3,
     "maxWatch": 3,
+    "watchMaxShare": 5,
     "minQuoteWords": 4,
     "maxUntaggedShare": 25
   },

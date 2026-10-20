@@ -116,7 +116,7 @@ def check_evidence(errors, path, theme, cfg, by_id):
     """Quotes must be word for word, from tagged items the brief may quote (private items need privateQuotes).
     A theme built only from private feedback is described and cited, not quoted."""
     limits = cfg["scope"]["themes"]
-    private_ok = cfg["userScope"].get("privateQuotes")
+    private_ok = cfg["userScope"].get("privateQuotes", True)
     tagged = theme.get("computed", {}).get("items") or []
     quotable = [i for i in tagged if private_ok or not (by_id.get(i) or {}).get("private")]
     wanted = 1 if theme.get("decision") == "watch" else limits["minEvidence"]
@@ -162,8 +162,9 @@ def themes(cfg, info):
         score = computed.get("score", 0)
         if theme.get("decision") == "watch":  # rare but serious: below the keep score, still shown
             watched += 1
-            if score >= limits["keepScore"]:
-                errors.append(f"`{path}` scores {score}, enough to keep; keep it instead of watching it")
+            share = computed.get("share", 0)
+            if share > limits["watchMaxShare"]:
+                errors.append(f"`{path}` is {share}% of feedback; the watchlist is for rare items (up to {limits['watchMaxShare']}%), so keep it")
             if scores.get("impact", 0) < 2:
                 errors.append(f"`{path}` is on the watchlist, which is only for serious items (impact 2 or 3)")
             if not computed.get("count"):
