@@ -11,7 +11,8 @@ There is no app to deploy. The harness provides the agent loop; this project pro
 Every company gets customer feedback: support tickets, surveys, issue trackers, forums, reviews. Someone needs to know **what customers are saying, what changed, and what to do about it**. Each brief gives:
 
 - **Up to three things to act on,** each with an owner and a **draft ticket** for the team, ready to copy into Jira, Linear or GitHub. Nothing is filed for you
-- **The main themes,** each with real quotes **and their sources**
+- **The main themes,** each with real quotes **and their sources**, when it started and peaked, and who customers say is affected
+- **What's working:** what customers praise, worth passing on to the teams behind it
 - **A watchlist** of rare but serious feedback (scams, harm, vulnerable customers, regulator complaints, anything your profile says always matters), shown even when there are only a few items
 - **What's new, growing or rising,** computed from real dates
 - **The numbers:** volume, ratings, items per day and per theme, all counted by code

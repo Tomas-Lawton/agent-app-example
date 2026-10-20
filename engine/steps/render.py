@@ -56,6 +56,7 @@ def claims():
     out = []
     fields = [("headline", x.get("headline"))]
     fields += [(f"theme {t['id']}", t.get("summary")) for t in x.get("themes") or []]
+    fields += [(f"theme {t['id']}", t.get("who")) for t in x.get("themes") or [] if t.get("who")]
     fields += [(f"watch {w['id']}", w.get("why")) for w in x.get("watch") or []]
     for a in x.get("actions") or []:
         fields += [(f"action {a['theme']}", a.get("detail")), (f"ticket {a['theme']}", (a.get("ticket") or {}).get("body"))]
@@ -275,6 +276,20 @@ def ratings_chart():
             f"<table role='presentation' width='100%' cellpadding='0' cellspacing='0'>{rows}</table>")
 
 
+def day(d):
+    d = datetime.date.fromisoformat(d)
+    return f"{d:%a} {d.day} {d:%b}"
+
+
+def when_text(s):
+    """Since when and the peak day, counted by code from the items' dates (plain text)."""
+    if not s.get("firstSeen"):
+        return ""
+    start = (S.get("coverage") or {}).get("from") or S["window"]["since"]
+    first = "Throughout the period" if s["firstSeen"] <= start else f"First seen {day(s['firstSeen'])}"
+    return first + (f", peaked {day(s['peakDay'])} ({s['peakCount']})" if s.get("peakCount", 0) > 1 else "")
+
+
 def body(preview, img):
     t, ch = S["totals"], S.get("change") or {}
     icon = PRODUCT.get("iconUrl")
@@ -323,23 +338,37 @@ def body(preview, img):
                          f"<div style='{F}font-size:12px;color:{MUTED};margin-top:6px'>Reach is counted by code; impact is the agent's judgement "
                          f"(0 to 3, with ease of acting nudging it up). Top right is where to act first.</div>"))
 
-    rows.append(section("What customers are saying", "Every quote is word for word, with its source"))
-    for th in x["themes"]:
+    def when(s):
+        w = when_text(s)
+        return f"<div style='{F}font-size:12px;color:{INK};margin-top:6px'><b>When:</b> {e(w)}</div>" if w else ""
+
+    def theme_card(th):
         s = themes_by_id[th["id"]]
         trend = pill(*TREND[s["trend"]]) if s["trend"] in TREND else ""
+        who = (f"<div style='{F}font-size:12px;color:{INK};margin-top:3px'><b>Who:</b> {cite(th['who'])}</div>") if th.get("who") else ""
         rating = f" &middot; average rating {s['avgRating']}" if s["avgRating"] is not None else ""
         size = f"{s['count']} items &middot; {s['share']}% of all feedback &middot; {s['firstHalf']} then {s['secondHalf']} across the period"
         prev = f" &middot; {s['previousShare']}% last run" if s.get("previousShare") is not None else ""
         srcs = "".join(f"{source_tag(k)}<span style='margin-right:8px'>{v}</span>" for k, v in (s.get("sources") or {}).items())
-        rows.append(card(
+        return card(
             f"<a name='{e(th['id'])}' id='{e(th['id'])}'></a><div>{pill(s['kind'], KIND.get(s['kind'], BRAND), solid=True)}{trend}</div>"
             f"<div style='{F}font-size:17px;font-weight:700;color:{INK};margin-top:4px'>{e(th['title'])}</div>"
             f"<div style='{F}font-size:12px;color:{MUTED};margin-top:3px'>{size}{prev}{rating}</div>"
             f"<div style='{F}font-size:14px;line-height:1.55;color:{INK};margin-top:8px'>{cite(th['summary'])}</div>"
-            + label("interpretation", f"theme {th['id']}", len(set(checks.citations(th['summary']))))
+            + when(s) + who
+            + label("interpretation", f"theme {th['id']}", len(set(checks.citations(th['summary'])) | set(checks.citations(th.get('who')))))
             + "".join(quote(q) for q in th["quotes"])
             + f"<div style='{F}font-size:12px;color:{MUTED};margin-top:10px'>From {srcs}</div>",
-            accent=KIND.get(s["kind"], BRAND)))
+            accent=KIND.get(s["kind"], BRAND))
+
+    issues = [th for th in x["themes"] if themes_by_id[th["id"]]["kind"] != "praise"]
+    working = [th for th in x["themes"] if themes_by_id[th["id"]]["kind"] == "praise"]
+    if issues:
+        rows.append(section("What customers are saying", "Every quote is word for word, with its source"))
+        rows += [theme_card(th) for th in issues]
+    if working:
+        rows.append(section("What's working", "What customers praise: worth passing on to the teams behind it"))
+        rows += [theme_card(th) for th in working]
 
     if x.get("watch"):
         watch_by_id = {w["id"]: w for w in S.get("watch", [])}
@@ -502,16 +531,24 @@ def markdown():
         out += ["![Feedback map](map.png)", ""]
     if os.path.exists("out/matrix.png"):
         out += ["![Where to focus: themes by reach and impact](matrix.png)", ""]
-    out += ["## What customers are saying", ""]
-    for th in x["themes"]:
-        s = themes_by_id[th["id"]]
-        trend = f" · {TREND[s['trend']][0]}" if s["trend"] in TREND else ""
-        srcs = ", ".join(f"{conns.get(k, {}).get('label', k)} {v}" for k, v in (s.get("sources") or {}).items())
-        out += [f"### {th['title']}", f"*{s['kind']} · {s['count']} items · {s['share']}% of feedback{trend} · sources: {srcs}*", "", th["summary"], ""]
-        for q in th["quotes"]:
-            it = items.get(q["item"], {})
-            src = f"[{it.get('sourceLabel', '')}]({it['url']})" if it.get("url") else it.get("sourceLabel", "")
-            out += [f"> \u201c{q['text']}\u201d", f"> \u2014 {src}, {it.get('date', '')}", ""]
+    groups = [("What customers are saying", [th for th in x["themes"] if themes_by_id[th["id"]]["kind"] != "praise"]),
+              ("What's working", [th for th in x["themes"] if themes_by_id[th["id"]]["kind"] == "praise"])]
+    for heading, group in groups:
+        if not group:
+            continue
+        out += [f"## {heading}", ""]
+        for th in group:
+            s = themes_by_id[th["id"]]
+            trend = f" · {TREND[s['trend']][0]}" if s["trend"] in TREND else ""
+            srcs = ", ".join(f"{conns.get(k, {}).get('label', k)} {v}" for k, v in (s.get("sources") or {}).items())
+            out += [f"### {th['title']}", f"*{s['kind']} · {s['count']} items · {s['share']}% of feedback{trend} · sources: {srcs}*", "", th["summary"], ""]
+            out += [f"**When:** {when_text(s)}"] if when_text(s) else []
+            out += [f"**Who:** {th['who']}"] if th.get("who") else []
+            out += [""]
+            for q in th["quotes"]:
+                it = items.get(q["item"], {})
+                src = f"[{it.get('sourceLabel', '')}]({it['url']})" if it.get("url") else it.get("sourceLabel", "")
+                out += [f"> \u201c{q['text']}\u201d", f"> \u2014 {src}, {it.get('date', '')}", ""]
     if x.get("watch"):
         out += ["## Watchlist", "*Rare but serious: only a few items, but worth knowing about.*", ""]
         for w in x["watch"]:

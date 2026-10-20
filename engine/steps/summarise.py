@@ -85,11 +85,14 @@ for t in data.get("themes", []):
     tr, growth, first, second = trend(t.get("id"), ids, share)
     sc = t.get("scores") or {}
     impact, act = min(max(int(sc.get("impact", 0) or 0), 0), 3), min(max(int(sc.get("actionability", 0) or 0), 0), 2)
-    per = {}
+    per, days = {}, {}
     for i in ids:
         per[by_id[i]["source"]] = per.get(by_id[i]["source"], 0) + 1
+        days[by_id[i]["date"]] = days.get(by_id[i]["date"], 0) + 1
+    peak = max(days.items(), key=lambda kv: (kv[1], kv[0])) if days else (None, 0)
     t["computed"] = {**stats([by_id[i] for i in ids]), "count": len(ids), "share": share, "sources": per,
                      "firstHalf": first, "secondHalf": second, "trend": tr,
+                     "firstSeen": min(days) if days else None, "peakDay": peak[0], "peakCount": peak[1],
                      "previousShare": None if prev is None else (prev.get(t.get("id")) or {}).get("share", 0),
                      "breadth": breadth, "growth": growth, "score": impact + act + breadth + growth, "items": ids}
 json.dump(data, open("themes.json", "w"), indent=2, ensure_ascii=False)
@@ -115,7 +118,7 @@ summary = {
     "coverage": {"from": covered.isoformat(), "until": info["until"], "analysed": len(items), "collected": len(window)},
     "untaggedShare": round(100 * untagged / N), "previous": prev_sum["date"] if prev_sum else None, "change": change, "daily": daily,
     "themes": [{"id": t["id"], "title": t["title"], "kind": t.get("kind"),
-                **{k: t["computed"][k] for k in ("count", "share", "avgRating", "lowShare", "trend", "firstHalf", "secondHalf", "previousShare", "score", "sources")},
+                **{k: t["computed"][k] for k in ("count", "share", "avgRating", "lowShare", "trend", "firstHalf", "secondHalf", "previousShare", "score", "sources", "firstSeen", "peakDay", "peakCount")},
                 "impact": (t.get("scores") or {}).get("impact"), "actionability": (t.get("scores") or {}).get("actionability")}
                for t in kept],
     "watch": [{"id": t["id"], "title": t["title"], "kind": t.get("kind"), **{k: t["computed"][k] for k in ("count", "share", "trend", "sources")}}

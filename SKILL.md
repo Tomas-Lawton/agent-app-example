@@ -39,6 +39,8 @@ Run every command from the repository root. When you need anything the scripts d
 - Up to three actions, on themes scoring 6 or more, most important first, owned by roles. Praise is never an action. If nothing material changed, set `quietWeek: true` and say so.
 - Each action has a **draft ticket** for the owning team: a clear title, and a body with what's happening, the evidence (counts from `summary.json`, a short quote), and what to check first. Never file it.
 - **Watchlist:** list every watched theme in the plan's `watch`, and for each write a title, one or two cited sentences on why it matters (`why`), and one or two of its quotes.
+- **Who is affected (optional per theme):** a `who` sentence on who customers say is affected, from what they mention (device, product, place, type of customer), cited like a summary. Leave it out when the feedback doesn't say; never guess. Code adds when each theme was first seen and its peak day.
+- **What's working:** if any praise theme is kept, show at least one. Praise themes appear in their own "What's working" section, worth passing on to the teams behind them; praise is never an action.
 - **Questions:** write 2 or 3 follow-up questions this brief raises that the reader could ask you, specific to what you found ("Did the lockouts start right after the 4.2 release?", not "Tell me more"). The brief shows them under "Ask your agent".
 - **Session link (optional):** if your harness gives this conversation a link (an `https://` session URL) or a one-line resume command, put it in `session` so the email can link back. Leave it out if you don't have a real one; never make one up.
 - **Quotes:** show three per theme (fewer only if the theme has fewer checked quotes). The theme summary cites the quoted items along with the others it rests on.
@@ -54,7 +56,7 @@ Run every command from the repository root. When you need anything the scripts d
 {"meta": {"dateLabel": "...", "windowLabel": "..."}, "subject": "Weekly Feedback Brief: ...", "preheader": "One sentence.", "headline": "...",
  "actions": [{"theme": "cards-declined", "title": "Reduce false fraud declines", "detail": "One or two sentences, each cited [tickets-012].", "owner": "...",
    "ticket": {"title": "False declines on everyday card purchases since Thursday", "body": "What is happening [tickets-012, survey-087]. What to check first [tickets-031]."}}],
- "themes": [{"id": "cards-declined", "title": "...", "summary": "Each sentence ends with its citations [tickets-012, tickets-019].", "quotes": [{"item": "tickets-012", "text": "..."}]}],
+ "themes": [{"id": "cards-declined", "title": "...", "summary": "Each sentence ends with its citations [tickets-012, tickets-019].", "who": "Optional: who customers say is affected [tickets-012].", "quotes": [{"item": "tickets-012", "text": "..."}]}],
  "watch": [{"id": "scam-calls", "title": "...", "why": "Why it matters, cited [tickets-044].", "quotes": [{"item": "tickets-044", "text": "..."}]}],
  "questions": ["A specific follow-up question this brief raises?", "Another?"], "session": {"url": "https://... (optional, only a real one)"},
  "footer": "Anything the reader should know about the evidence: a blocked connection, a partly covered window."}

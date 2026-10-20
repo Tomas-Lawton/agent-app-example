@@ -119,6 +119,8 @@ def plan(cfg, info):
         if t["computed"]["score"] < lim["actionScore"]: err.append(f"`actions[{k}]` theme scores {t['computed']['score']}; actions need {lim['actionScore']}")
         if a["theme"] not in show: err.append(f"action theme `{a['theme']}` must also be in `themes`")
     if not 1 <= len(show) <= lim["maxThemes"] or any(tid not in kept for tid in show): err.append(f"`themes` must list 1 to {lim['maxThemes']} kept theme ids")
+    praise = [tid for tid, t in kept.items() if t.get("kind") == "praise"]
+    if praise and not any(tid in praise for tid in show): err.append(f"`themes` must include at least one praise theme for \"What's working\": {', '.join(praise)}")
     if sorted(d.get("watch") or []) != sorted(_kept("watch")): err.append(f"`watch` must list every watched theme: {', '.join(sorted(_kept('watch'))) or 'none'}")
     return err
 
@@ -153,7 +155,10 @@ def content(cfg, info):
         for j, q in enumerate(w.get("quotes") or []):
             if (q.get("item"), norm(q.get("text"))) not in ev: err.append(f"`watch[{k}].quotes[{j}]` is not one of the theme's checked quotes")
     for k, t in enumerate(x.get("themes") or []):
-        _cited(err, f"themes[{k}].summary", t.get("summary"), set((kept.get(t.get("id")) or {}).get("computed", {}).get("items") or []), by_id)
+        allowed = set((kept.get(t.get("id")) or {}).get("computed", {}).get("items") or [])
+        _cited(err, f"themes[{k}].summary", t.get("summary"), allowed, by_id)
+        if t.get("who"):  # optional: who is affected, as customers describe it
+            _cited(err, f"themes[{k}].who", t.get("who"), allowed, by_id)
     for k, a in enumerate(x.get("actions") or []):
         allowed = set((kept.get(a.get("theme")) or {}).get("computed", {}).get("items") or [])
         _cited(err, f"actions[{k}].detail", a.get("detail"), allowed, by_id)
