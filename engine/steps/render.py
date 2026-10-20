@@ -64,8 +64,11 @@ def claims():
     fields += [(f"theme {t['id']}", t.get("summary")) for t in x.get("themes") or []]
     fields += [(f"theme {t['id']}", t.get("who")) for t in x.get("themes") or [] if t.get("who")]
     fields += [(f"watch {w['id']}", w.get("why")) for w in x.get("watch") or []]
+    for entry in (x.get("themes") or []) + (x.get("watch") or []):  # each quote must be a clear example of its theme
+        for q in entry.get("quotes") or []:
+            fields.append((f"quote {entry['id']}", f'This feedback is a clear example of "{entry.get("title", "")}" [{q["item"]}].'))
     for a in x.get("actions") or []:
-        fields.append((f"action {a['theme']}", a.get("detail")))
+        fields.append((f"action {a['theme']}", a.get("detail")))  # optional
         tk = a.get("ticket") or {}
         if tk.get("issue") and tk.get("items"):
             fields.append((f"ticket {a['theme']}", f"{tk['issue']} [{', '.join(tk['items'])}]"))
@@ -316,6 +319,20 @@ def ticket(a, preview):
     )
 
 
+def action_ticket(a, preview):
+    """An action is its draft ticket: title, the issue, who owns it, the feedback it rests on, and buttons."""
+    tk = a.get("ticket") or {}
+    refs = cite("[" + ", ".join(tk.get("items") or []) + "]") if tk.get("items") else ""
+    return (
+        f"<div style='{F}font-size:11px;color:{MUTED};text-transform:uppercase;letter-spacing:.5px'>"
+        f"Draft ticket for {e(a.get('owner'))} &middot; not filed</div>"
+        f"<div style='{F}font-size:16px;font-weight:700;color:{INK};margin-top:3px'>{e(tk.get('title') or a.get('title'))}</div>"
+        f"<div style='{F}font-size:14px;line-height:1.55;color:{INK};margin-top:4px'>{e(tk.get('issue'))}</div>"
+        f"<div style='{F}font-size:12px;color:{MUTED};margin-top:6px'>Feedback: {refs}</div>"
+        f"{ticket_buttons(tk, preview)}"
+    )
+
+
 def ticket_buttons(tk, preview):
     title, body = tk.get("title", ""), ticket_text(tk)
     out = copy_button(title + chr(10) + chr(10) + body, preview, "Copy ticket")
@@ -547,11 +564,11 @@ def body(preview, img):
         tail = f"{c.get('collected', c.get('kept', 0))} items" if ok else c["status"]
         lock = " &middot; private" if c.get("private") else ""
         chips.append(
-            f"<span style='display:inline-block;margin:8px 4px 0 0'>{source_tag(c['id'])}"
+            f"<span style='display:block;margin:6px 0 0'>{source_tag(c['id'])}"
             f"<span style='{F}font-size:12px;color:{INK if ok else '#c2410c'}'>{e(c['type'])} &middot; {e(tail)}{lock}</span></span>"
         )
     rows.append(
-        f"<tr><td style='padding:6px 24px 0'><span style='{F}font-size:12px;color:{MUTED}'>Read from:</span> {''.join(chips)}</td></tr>"
+        f"<tr><td style='padding:6px 24px 0'><div style='{F}font-size:12px;color:{MUTED}'>Read from:</div>{''.join(chips)}</td></tr>"
     )
     if S.get("capped"):
         cv = S["coverage"]
@@ -577,8 +594,8 @@ def body(preview, img):
             )
         )
     rows.append(section("At a glance"))
-    left = [box(volume_chart()), box(mix_chart() or sources_chart())]
-    rows.append(split(left, box(themes_chart())))
+    rows.append(grid([box(volume_chart()), box(mix_chart() or sources_chart())]))
+    rows.append(card(themes_chart()))
     if ratings_chart():
         rows.append(card(ratings_chart()))
 
@@ -668,12 +685,7 @@ def body(preview, img):
                     f"<table role='presentation' width='100%' cellpadding='0' cellspacing='0'><tr>"
                     f"<td width='40' valign='top'><div style='{F}width:30px;height:30px;border-radius:15px;background:{ACCENT};color:#fff;"
                     f"font-weight:700;font-size:15px;line-height:30px;text-align:center'>{n}</div></td>"
-                    f"<td valign='top'><div style='{F}font-size:16px;font-weight:700;color:{INK}'>{e(a['title'])}</div>"
-                    f"<div style='{F}font-size:14px;line-height:1.55;color:{INK};margin-top:4px'>{cite(a['detail'])}</div>"
-                    + label("interpretation", f"action {a['theme']}", len(set(checks.citations(a["detail"]))))
-                    + f"<div style='{F}font-size:12px;color:{MUTED};margin-top:6px'>Owner: {e(a['owner'])}</div>"
-                    + ticket(a, preview)
-                    + f"</td></tr></table>"
+                    f"<td valign='top'>{action_ticket(a, preview)}</td></tr></table>"
                 )
             )
 
@@ -816,7 +828,8 @@ def page(img, preview=False):
 def text():
     out = [NAME, f"{x['meta']['dateLabel']}, feedback from {x['meta']['windowLabel']}", "", x["headline"], ""]
     for n, a in enumerate(x.get("actions") or [], 1):
-        out += [f"{n}. {a['title']}", f"   {a['detail']}", f"   Owner: {a['owner']}"]
+        tk = a.get("ticket") or {}
+        out += [f"{n}. {tk.get('title') or a.get('title', '')} ({a.get('owner', '')})", f"   {tk.get('issue', '')}"]
     for th in x["themes"]:
         s = themes_by_id[th["id"]]
         out += ["", f"* {th['title']} ({s['count']} items, {s['share']}%)", f"  {th['summary']}"]
@@ -905,9 +918,7 @@ def markdown():
         for n, a in enumerate(x["actions"], 1):
             tk = a.get("ticket") or {}
             out += [
-                f"{n}. **{a['title']}** {a['detail']} *Owner: {a['owner']}*",
-                f"   > **Draft ticket: {tk.get('title', '')}**  ",
-                f"   > {tk.get('issue', '')} *Feedback: {', '.join(tk.get('items') or [])}*",
+                f"{n}. **{tk.get('title') or a.get('title', '')}** ({a.get('owner', '')}): {tk.get('issue', '')} *Feedback: {', '.join(tk.get('items') or [])}*",
                 "",
             ]
     if CITED:

@@ -280,7 +280,8 @@ def check_actions(errors, content, kept, by_id):
     for k, action in enumerate(content.get("actions") or []):
         allowed = tagged_items(kept.get(action.get("theme")))
         ticket = action.get("ticket") or {}
-        check_cited(errors, f"actions[{k}].detail", action.get("detail"), allowed, by_id)
+        if action.get("detail"):  # optional
+            check_cited(errors, f"actions[{k}].detail", action.get("detail"), allowed, by_id)
         if "issue" not in ticket and ticket.get("body"):  # the older shape: citations inside the body
             check_cited(errors, f"actions[{k}].ticket.body", ticket.get("body"), allowed, by_id)
             check_text(errors, f"actions[{k}].ticket.title", ticket.get("title"))
