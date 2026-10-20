@@ -54,14 +54,20 @@ You handle the connector: the user only says what they use. Each connection has 
 - **File:** save the export in `profiles/<key>/data/` (offer to move it), read its header row, map the columns, and ask whether it's private. `{"type": "file", "file": "data/tickets.csv", "columns": {...}, "private": true}`.
 
 ## Email
-Works with any provider over SMTP. Ask: the address to send from, and an **app password** for it (explain in one line where to create one: Google Account → Security → App passwords; Microsoft account → Security → Advanced security options). Write them to `.env` in the project root (create the file if needed, and tell the user its full path); it is never committed:
+Works with any provider over SMTP. The brief is sent as the email itself, from an account the user owns, to the recipient in the user scope. Ask for the **address to send from** and the **address to send to** (they can be the same), then walk the user through the app password as numbered steps, because most people have never made one. For Gmail:
+1. Use a personal Gmail account to send from. Work and school accounts often block app passwords.
+2. Open https://myaccount.google.com/security and turn on **2-Step Verification** if it is off (app passwords need it).
+3. Open https://myaccount.google.com/apppasswords, type a name such as `Feedback brief`, and click **Create**.
+4. Google shows a 16-letter password once. That is the app password; it is not their normal password, and spaces don't matter.
+
+Offer two ways to hand it over: paste the 16 letters in the chat, or (better, so it never sits in the chat) open the `.env` file you create and paste it after `SMTP_PASSWORD=` themselves. Outlook and iCloud work the same way (Microsoft account → Security → Advanced security options → App passwords; Apple ID → Sign-In and Security → App-Specific Passwords). Write the settings to `.env` in the project root (create the file if needed, and tell the user its full path); it is never committed. `SMTP_USER` is the full sending address:
 ```
 SMTP_HOST=smtp.gmail.com
 SMTP_PORT=587
 SMTP_USER=you@example.com
 SMTP_PASSWORD=app-password
 ```
-Common hosts: Gmail `smtp.gmail.com`, Outlook `smtp.office365.com`, iCloud `smtp.mail.me.com`. Send one test with `python3 engine/steps/send.py <key>` after the first brief. Changing the recipient is a user scope change.
+Common hosts: Gmail `smtp.gmail.com`, Outlook `smtp.office365.com`, iCloud `smtp.mail.me.com`. Save the recipient in `user_scope.json` → `recipients`. Send one test with `python3 engine/steps/send.py <key>` after the first brief, and only that way: never send email any other way. The send gate refuses until the user scope change is pushed, so tell the user to push the setup commit first (one line: `git push`). Changing the recipient later is a user scope change.
 
 ## Schedule
 Record it in `user_scope.json` → `schedule`, for example `{"days": ["Mon"], "time": "08:00"}`. A scheduled run has nobody in the chat, so it always sends by email (the job runs `send.py` after the agent finishes), carries only `SKILL.md` (never this setup skill, so it has no instructions for changing its own reach), and can only write to `runs/`. Trigger it once by hand and check the result with the user before leaving it on. This path is designed but not yet proven end to end: tell the user so.
