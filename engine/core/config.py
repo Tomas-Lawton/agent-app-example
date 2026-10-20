@@ -60,7 +60,7 @@ def profile(key):
     for line in head.splitlines():
         if ":" in line and line.strip() and not line.lstrip().startswith("#"):
             k, v = line.split(":", 1)
-            raw[k.strip().lower()] = v.strip()
+            raw[k.strip().lower()] = re.sub(r"\s*\([^)]*\)\s*$", "", v).strip()  # drop a trailing (note)
     colours = dict(part.split() for part in raw.get("colours", "").split(",") if len(part.split()) == 2)
     window = raw.get("time window", "7").split()[0]
     return raw, {"product": {"name": raw.get("product", key), "iconUrl": raw.get("icon") or None},

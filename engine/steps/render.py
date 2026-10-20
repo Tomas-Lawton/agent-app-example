@@ -95,7 +95,8 @@ def pill(text, colour, solid=False):
 
 def link_button(href, label):
     """A plain link styled as a button: works in every email client, unlike scripts."""
-    return (f"<a href='{e(href)}' style='display:inline-block;{F}font-size:13px;font-weight:600;color:{BRAND};background:#ffffff;"
+    blank = " target='_blank' rel='noopener'" if href.startswith("https://") else ""
+    return (f"<a href='{e(href)}'{blank} style='display:inline-block;{F}font-size:13px;font-weight:600;color:{BRAND};background:#ffffff;"
             f"border:1px solid {BRAND};border-radius:8px;padding:7px 12px;margin:6px 6px 0 0;text-decoration:none'>{e(label)}</a>")
 
 
@@ -209,8 +210,18 @@ def ticket_buttons(tk, preview):
     made = create_link(title, body)
     if made:
         out += link_button(*made)
-    q = urllib.parse.quote
-    return out + link_button(f"mailto:?subject={q(title)}&body={q(body[:1500])}", "Email this")
+    return out + link_button(email_link(title, body[:1500], preview), "Email this")
+
+
+def email_link(subject, body, preview):
+    """In an email, mailto opens a reply in the reader's own mail client. A browser often has no mail app set up for
+    mailto, so the preview opens the compose page of the sending account's webmail instead (from SMTP_HOST, not a secret)."""
+    q, host = urllib.parse.quote, (config.env("SMTP_HOST") or "").lower()
+    if preview and "gmail" in host:
+        return f"https://mail.google.com/mail/?view=cm&fs=1&su={q(subject)}&body={q(body)}"
+    if preview and ("office365" in host or "outlook" in host):
+        return f"https://outlook.office.com/mail/deeplink/compose?subject={q(subject)}&body={q(body)}"
+    return f"mailto:?subject={q(subject)}&body={q(body)}"
 
 
 def ticket_text(body):

@@ -38,19 +38,18 @@ The user names their tools; you work out the connection. Never offer write acces
      brief name: Weekly Customer Feedback Brief
      reader: Priya Raman, General Manager, Customer Experience
      time window: 7 days
-     output: chat            (chat, email or both)
+     output: both
      colours: brand #0b2545, brand2 #13315c, accent #c9a227, tint #eef2f8
-     tickets: github capital-bank/cx-feedback      (or: linear CX, or: jira https://capitalbank.atlassian.net 10001)
-     icon:                   (optional: a logo image address)
+     tickets: github capital-bank/cx-feedback
      ---
      **Who it's for.** ... **What matters.** ... **Tone.** ... **Standing instructions.** ...
      ```
-     Write the free text in the user's words: who reads it, what matters, what is urgent, what to keep apart, how to route tickets, the tone. Never invent facts about the company.
+     `output` is exactly `chat`, `email` or `both`, from question 4. `tickets` is optional: `github owner/repo`, `linear TEAM` or `jira https://site.atlassian.net <project id>`. `icon` is optional: a logo image address. Write each value on its own, with no notes after it. Write the free text in the user's words: who reads it, what matters, what is urgent, what to keep apart, how to route tickets, the tone. Never invent facts about the company.
    - **`user_scope.json`**, what the brief may reach, which only setup writes (see the next step). It is a separate file on purpose: a profile can change how the brief looks, never what it can reach.
 2. **If any connection is private** (a warehouse, a keyed service, a private file), ask one more question: *"Can the brief quote that feedback word for word? Yes is usual when the brief stays inside the company; no means themes are described and cited, but not quoted."* Set `privateQuotes` from the answer.
    Write `user_scope.json`: `{"timezone": "Australia/Sydney", "recipients": ["reader@company.com"], "sources": [...], "privateQuotes": false, "schedule": null}`, with each connection below in `sources`. Test each one by running `python3 engine/steps/collect.py <key>` and showing the user a few items from `items.json`; keep it only when they confirm.
 3. Set up email and the schedule if chosen (below), read back the connections, recipient and schedule, and ask the user to confirm. Then **lock** it: commit the profile (`git add profiles/<key> && git commit -m "Profile <key>: approved by the user"`) and ask the user to push it, or open a pull request, with their own access; the agent never pushes. The send gate compares the engine, the skill and the user scope with the shared repository and refuses to send if they differ, so a change only takes effect once a person with write access has accepted it. Without a shared repository, it checks against the local commit (run `git init` first if there is none).
-4. Run the first brief with [SKILL.md](../SKILL.md) and present it in the chosen format.
+4. Run the first brief with [SKILL.md](../SKILL.md) and present it in the chosen format. **If `output` is `email` or `both`, the brief must also be emailed:** check the user has pushed the setup commit (if not, ask them to and wait), then run `python3 engine/steps/send.py <key>` and tell them it was sent, or show exactly why it was blocked and what fixes it. Never finish setup without either sending or explaining why not.
 
 ## Connections
 You handle the connector: the user only says what they use. Each connection has a short `id` and a plain `label`, maps the provider's own field names onto the item shape (`date` and `text` required; `id`, `title`, `rating`, `url` optional), and sets `maxItems` to cover the window (each run reads the most recent 500 items across all connections). Test each one and show the user a sample before keeping it.
