@@ -131,6 +131,10 @@ def content(cfg, info):
     if m.get("dateLabel") != info["dateLabel"] or m.get("windowLabel") != info["windowLabel"]:
         err.append(f"`meta` must copy dateLabel \"{info['dateLabel']}\" and windowLabel \"{info['windowLabel']}\" from run.json")
     for f in ("subject", "preheader", "headline", "footer"): _text(err, f, x.get(f))
+    ss = x.get("session") or {}
+    if ss and (set(ss) - {"url", "resume"} or (ss.get("url") and not str(ss["url"]).startswith("https://"))
+               or len(str(ss.get("resume", ""))) > 200 or "\n" in str(ss.get("resume", ""))):
+        err.append("`session` is optional: {\"url\": \"https://...\"} or {\"resume\": \"a one-line command\"}, only if your harness gives you one")
     qs = x.get("questions") or []
     if not 2 <= len(qs) <= 3: err.append("`questions` needs 2 or 3 follow-up questions the reader could ask about this brief")
     for k, q in enumerate(qs):

@@ -44,7 +44,8 @@ def _read(path):
     return json.load(open(path))
 
 
-SETTINGS = {"product", "brief name", "reader", "time window", "output", "icon", "colours"}
+SETTINGS = {"product", "brief name", "reader", "time window", "output", "icon", "colours", "tickets"}
+TRACKERS = ("github", "linear", "jira")
 
 
 def profile(key):
@@ -65,7 +66,7 @@ def profile(key):
     return raw, {"product": {"name": raw.get("product", key), "iconUrl": raw.get("icon") or None},
                  "reader": raw.get("reader", ""), "windowDays": int(window) if window.isdigit() else 7,
                  "delivery": raw.get("output", "chat").lower(), "wording": {"briefName": raw.get("brief name", "Customer Feedback Brief")},
-                 "theme": colours}
+                 "theme": colours, "tickets": raw.get("tickets", "").split()}
 
 
 def check(key, s, u, p, raw=None):
@@ -119,6 +120,9 @@ def check(key, s, u, p, raw=None):
                 out.append(f"`{sid}` auth must name a key in .env (`env`) with a type of {', '.join(svc['authTypes'])}; never put the key itself here")
     if p.get("delivery", "chat") not in ("chat", "email", "both"):
         out.append("PROFILE.md `output` must be chat, email or both")
+    tk = p.get("tickets") or []
+    if tk and (tk[0].lower() not in TRACKERS or len(tk) < 2 or (tk[0].lower() == "jira" and len(tk) < 3)):
+        out.append("PROFILE.md `tickets` must be `github owner/repo`, `linear TEAM` or `jira https://site.atlassian.net <project id>`")
     for f in sorted(set(raw or {}) - SETTINGS):
         out.append(f"PROFILE.md sets `{f}`, which is not a profile setting (connections, recipients and schedule belong in user_scope.json)")
     return out

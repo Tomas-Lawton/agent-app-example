@@ -19,7 +19,7 @@ Nothing is filed or posted for them.
 """
 import os, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # engine/
-import base64, datetime, glob, hashlib, html, json
+import base64, datetime, glob, hashlib, html, json, urllib.parse
 from email.message import EmailMessage
 from email.utils import format_datetime, make_msgid
 from core import config, checks
@@ -90,6 +90,28 @@ def pill(text, colour, solid=False):
     style = f"background:{colour};color:#fff;" if solid else f"color:{colour};border:1px solid {colour};"
     return (f"<span style='display:inline-block;{F}font-size:11px;font-weight:600;{style}border-radius:999px;"
             f"padding:2px 9px;margin:0 6px 4px 0;text-transform:uppercase;letter-spacing:.4px'>{e(text)}</span>")
+
+
+def link_button(href, label):
+    """A plain link styled as a button: works in every email client, unlike scripts."""
+    return (f"<a href='{e(href)}' style='display:inline-block;{F}font-size:13px;font-weight:600;color:{BRAND};background:#ffffff;"
+            f"border:1px solid {BRAND};border-radius:8px;padding:7px 12px;margin:6px 6px 0 0;text-decoration:none'>{e(label)}</a>")
+
+
+def create_link(title, body):
+    """A link that opens a new ticket in the profile's tracker with the title and description filled in.
+    Nothing is filed: the reader reviews it and presses Create."""
+    tk, q = cfg.get("tickets") or [], urllib.parse.quote
+    body = body[:1500]
+    if not tk:
+        return None
+    kind = tk[0].lower()
+    if kind == "github":
+        return f"https://github.com/{tk[1]}/issues/new?title={q(title)}&body={q(body)}", "Create GitHub issue"
+    if kind == "linear":
+        return f"https://linear.new?team={q(tk[1])}&title={q(title)}&description={q(body)}", "Create Linear issue"
+    return (f"{tk[1].rstrip('/')}/secure/CreateIssueDetails!init.jspa?pid={q(tk[2])}&issuetype={q(tk[3] if len(tk) > 3 else '10001')}"
+            f"&summary={q(title)}&description={q(body)}"), "Create Jira issue"
 
 
 def copy_button(text, preview, label="Copy"):
@@ -177,7 +199,17 @@ def ticket(a, preview):
             f"<div style='{F}font-size:11px;color:{MUTED};text-transform:uppercase;letter-spacing:.5px'>Draft ticket, not filed</div>"
             f"<div style='{F}font-size:14px;font-weight:700;color:{INK};margin-top:3px'>{e(tk.get('title'))}</div>"
             f"<div style='{F}font-size:13px;line-height:1.55;color:{INK};margin-top:4px;white-space:pre-line'>{cite(tk.get('body'))}</div>"
-            f"{copy_button(tk.get('title', '') + chr(10) + chr(10) + ticket_text(tk.get('body', '')), preview, 'Copy ticket')}</div>")
+            f"{ticket_buttons(tk, preview)}</div>")
+
+
+def ticket_buttons(tk, preview):
+    title, body = tk.get("title", ""), ticket_text(tk.get("body", ""))
+    out = copy_button(title + chr(10) + chr(10) + body, preview, "Copy ticket")
+    made = create_link(title, body)
+    if made:
+        out += link_button(*made)
+    q = urllib.parse.quote
+    return out + link_button(f"mailto:?subject={q(title)}&body={q(body[:1500])}", "Email this")
 
 
 def ticket_text(body):
@@ -339,13 +371,17 @@ def body(preview, img):
 
 
     qs = "".join(f"<li style='margin:2px 0'>&ldquo;{e(q)}&rdquo;</li>" for q in x.get("questions") or [])
+    ss = x.get("session") or {}
+    back = (link_button(ss["url"], "Continue in your agent") if ss.get("url") else
+            f"<div style='{F}font-size:13px;color:{INK};margin-top:8px'>To continue this conversation, run in the project folder: "
+            f"<code style='background:{BG};padding:2px 6px;border-radius:4px'>{e(ss['resume'])}</code></div>" if ss.get("resume") else "")
     how = ("Ask the agent directly, in the conversation where this brief was made. It answers from this brief's evidence, "
            "with every claim cited. For example:" if preview else
-           "Follow-up questions can't be answered by email yet. Open the project in your agent harness and ask there, "
-           "for example:")
+           ("Follow-up questions can't be answered by email yet. Continue in your agent, where this brief was made, for example:" if back else
+            "Follow-up questions can't be answered by email yet. Open the project in your agent harness and ask there, for example:"))
     rows.append(section("Ask your agent"))
     rows.append(card(f"<div style='{F}font-size:14px;line-height:1.6;color:{INK}'>{how}"
-                     f"<ul style='margin:6px 0 0 18px;padding:0'>{qs}</ul>"
+                     f"<ul style='margin:6px 0 0 18px;padding:0'>{qs}</ul>{back}"
                      f"<div style='{F}font-size:12px;color:{MUTED};margin-top:8px'>You can also ask it to change the brief "
                      f"(&ldquo;make it shorter&rdquo;) or add a connection.</div></div>"))
 

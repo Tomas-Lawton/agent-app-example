@@ -16,7 +16,7 @@ The user is not technical. Never ask them to run commands or edit files; install
 2. **Connections.** Ask what they use for customer feedback, and show the common providers below as examples; they can name any other. Every answer fits one of three kinds (`scope.json` → `connectionTypes`): an **online service**, an **internal warehouse or data store**, or a **file**.
    > Helpdesks: Zendesk, Intercom, Freshdesk, Jira Service Management, HubSpot · Issue trackers and forums: GitHub Issues, Discourse, Reddit · Surveys and reviews: Typeform, SurveyMonkey, Trustpilot, Canny, App Store · Your warehouse: BigQuery · Or any export file
 3. **Time window:** how much feedback each brief covers (default the last 7 days, a weekly brief; up to 31).
-4. **Output format:** in the chat, by email, or both.
+4. **Output format:** in the chat, by email, or both. Then ask where their teams track work (GitHub, Linear or Jira, or none), so each draft ticket gets a one-click Create button that opens it pre-filled; nothing is filed for them.
 5. **Schedule:** on request, or automatically (for example "every Monday at 8am").
 6. **Look** (optional): the brief's name and colours.
 
@@ -33,6 +33,7 @@ The user names their tools; you work out the connection. Never offer write acces
      time window: 7 days
      output: chat            (chat, email or both)
      colours: brand #0b2545, brand2 #13315c, accent #c9a227, tint #eef2f8
+     tickets: github capital-bank/cx-feedback      (or: linear CX, or: jira https://capitalbank.atlassian.net 10001)
      icon:                   (optional: a logo image address)
      ---
      **Who it's for.** ... **What matters.** ... **Tone.** ... **Standing instructions.** ...

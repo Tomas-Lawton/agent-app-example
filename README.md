@@ -17,7 +17,7 @@ Every company gets customer feedback: support tickets, surveys, issue trackers, 
 - **The numbers:** volume, ratings, items per day and per theme, all counted by code
 - **A feedback map:** every item placed near similar feedback, coloured by theme and shaped by source
 
-You get it **in the chat**, **by email**, or both, over the time window you choose (a weekly brief by default). From the brief you can email an action's owner, copy its ticket, jump to the evidence and open any source. Anything else, such as filing a ticket, asking why a theme is growing or changing the brief, you do by talking to the agent.
+You get it **in the chat**, **by email**, or both, over the time window you choose (a weekly brief by default). From the brief you can open each draft ticket pre-filled in GitHub, Linear or Jira (you review it and press Create), email it, copy it (in the preview), jump to the evidence and open any source. Emails can't run scripts, so anything else, such as asking why a theme is growing or changing the brief, you do by talking to the agent; the email links back to the conversation when your harness gives it a link.
 
 ## How to use it
 
@@ -73,13 +73,14 @@ The two are deliberately separate: one use case, many clients.
   time window: 7
   output: both
   colours: brand #0b2545, brand2 #13315c, accent #c9a227, tint #eef2f8
+  tickets: github capital-bank/cx-feedback
   ---
   Our tagline is "Banking Built Around You". Lead with anything that blocks customers
   from paying or getting into their account. Always surface scam reports, even single ones.
   Keep it short: our reader skims on a phone.
   ```
 
-  Only these settings exist (`product`, `brief name`, `reader`, `time window`, `output`, `icon`, `colours`); any other is refused. So you can change anything about the brief by editing one markdown file, or by asking the agent to, and still can't widen its reach.
+  Only these settings exist (`product`, `brief name`, `reader`, `time window`, `output`, `icon`, `colours`, `tickets`); any other is refused. So you can change anything about the brief by editing one markdown file, or by asking the agent to, and still can't widen its reach.
 - **`profiles/<key>/user_scope.json` is the client's reach,** kept apart on purpose: connections, recipient, timezone and schedule. It is structured so code can check it against the use case scope every run, and only setup writes it, with the user's confirmation, before it is locked.
 
 The same split makes personalisation cheap. Ask *"use our new brand colours"* or *"focus on business customers this month"* and the agent edits the profile; the use case, and its checks, stay the same.
