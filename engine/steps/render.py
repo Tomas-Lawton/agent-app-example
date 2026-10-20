@@ -131,14 +131,22 @@ def source_label(sid):
     return f"<a href='{e(c['link'])}' style='color:{BRAND}'>{label}</a>" if c.get("link") else label
 
 
-def box(inner, accent=None):
+def box_style(accent=None):
     edge = f"border-left:4px solid {accent};" if accent else ""
-    return (f"<div style='background:#ffffff;border:1px solid {LINE};{edge}border-radius:12px;"
-            f"padding:16px 18px;box-shadow:0 1px 2px rgba(16,24,40,.05)'>{inner}</div>")
+    return (f"background:#ffffff;border:1px solid {LINE};{edge}border-radius:12px;"
+            f"padding:16px 18px;box-shadow:0 1px 2px rgba(16,24,40,.05)")
+
+
+def box(inner, accent=None):
+    return {"inner": inner, "accent": accent}  # drawn by full() or grid()
+
+
+def _div(b):
+    return f"<div style='{box_style(b['accent'])}'>{b['inner']}</div>"
 
 
 def full(b):
-    return f"<tr><td style='padding:8px 24px'>{b}</td></tr>"
+    return f"<tr><td style='padding:8px 24px'>{_div(b)}</td></tr>"
 
 
 def card(inner, accent=None):
@@ -148,10 +156,12 @@ def card(inner, accent=None):
 def grid(boxes):
     """Two boxes side by side (they stack on a phone); an odd last box takes the full width."""
     rows = []
-    for k in range(0, len(boxes) - 1, 2):
+    for k in range(0, len(boxes) - 1, 2):  # the cells are the cards, so both are always the same height
+        a, b = boxes[k], boxes[k + 1]
         rows.append(f"<tr><td style='padding:8px 24px'><table role='presentation' width='100%' cellpadding='0' cellspacing='0'><tr>"
-                    f"<td class='col' width='50%' valign='top' style='padding-right:8px'>{boxes[k]}</td>"
-                    f"<td class='col' width='50%' valign='top' style='padding-left:8px'>{boxes[k + 1]}</td></tr></table></td></tr>")
+                    f"<td class='col' width='49%' valign='top' style='{box_style(a['accent'])}'>{a['inner']}</td>"
+                    f"<td class='gap' width='2%' style='font-size:0;line-height:0'>&nbsp;</td>"
+                    f"<td class='col' width='49%' valign='top' style='{box_style(b['accent'])}'>{b['inner']}</td></tr></table></td></tr>")
     if len(boxes) % 2:
         rows.append(full(boxes[-1]))
     return "".join(rows)
@@ -552,7 +562,7 @@ def mix(a, b, w):
 def page(img, preview=False):
     DEEP = mix(BRAND, "#000000", .35)  # the primary colour, a bit darker
     css = ("@media (max-width:620px){.wrap{width:100%!important}.stat{display:block!important;width:100%!important;"
-           "border-bottom:1px solid " + LINE + "}.col{display:block!important;width:100%!important;padding:0 0 12px 0!important}}")
+           "border-bottom:1px solid " + LINE + "}.col{display:block!important;width:auto!important;margin-bottom:12px}.gap{display:none!important}}")
     strip = ""
     if preview:
         to = f"<br/><b>To:</b> {e(cfg['recipient'])}" if cfg.get("delivery") in ("email", "both") else ""
