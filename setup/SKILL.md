@@ -9,7 +9,7 @@ Setup decides **what the agent does** (connections, recipient, schedule: the use
 
 The user is not technical. Never ask them to run commands or edit files; install what's missing yourself (python3, then `python3 -m pip install -r requirements.txt` for the clustering and map); ask only for what you can't know.
 
-**Ask one question per message,** in the order below, and wait for the answer before the next. Keep each message to a line or two. Skip anything the user has already told you, offer the default so they can just say "yes", and don't repeat back everything after each answer. Summarise once, at the end, before you save.
+**Ask every question below, one per message, in order.** After each answer, ask the next question in your very next message; don't start building the profile until all six have been answered. Never skip a question because it has a default: ask it and offer the default, so the user can just say "yes". Only skip a question the user has already answered explicitly. Keep each message to a line or two, and don't repeat back everything after each answer. When all six are answered, summarise once and ask the user to confirm before you save anything.
 
 ## The questions, one at a time
 1. **About you:** the product or company, and who reads the brief. Then, if not already clear, their city (for the timezone) and what matters most, as a short follow up.

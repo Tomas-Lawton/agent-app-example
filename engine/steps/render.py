@@ -10,12 +10,12 @@ coloured by the agent's theme) with matplotlib. Writes:
   out/map.png        the feedback map
   out/preview.html   the full visual brief, with copy buttons
   out/email.html, out/email.txt, out/email.eml   the email
-The reader can email an action's owner, copy its draft ticket, jump to the evidence and open any source. Everything
-else is done by talking to the agent. Nothing is filed or posted for them.
+The reader can copy each action's draft ticket and open any source. Everything else is done by talking to the agent.
+Nothing is filed or posted for them.
 """
 import os, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # engine/
-import base64, datetime, glob, html, json, urllib.parse
+import base64, datetime, glob, html, json
 from email.message import EmailMessage
 from email.utils import format_datetime, make_msgid
 from core import config, checks
@@ -38,7 +38,7 @@ KIND = {"problem": TH.get("problem", "#c2410c"), "request": TH.get("request", "#
 TREND = {"new": ("New", ACCENT), "growing": ("Growing", ACCENT), "rising": ("Rising this period", ACCENT), "easing": ("Easing", "#15803d")}
 NAME = cfg.get("wording", {}).get("briefName", "Customer feedback brief")
 PRODUCT = cfg.get("product", {})
-F = "font-family:-apple-system,'Segoe UI',Roboto,Arial,Helvetica,sans-serif;"
+F = "font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Arial,Helvetica,sans-serif;"  # no quotes: styles sit in single quoted attributes
 e = lambda s: html.escape(str(s if s is not None else ""))
 themes_by_id = {t["id"]: t for t in S["themes"]}
 
@@ -57,16 +57,10 @@ def pill(text, colour, solid=False):
             f"padding:2px 9px;margin:0 6px 4px 0;text-transform:uppercase;letter-spacing:.4px'>{e(text)}</span>")
 
 
-def button(label, href, primary=False):
-    bg, fg, bd = (BRAND, "#ffffff", BRAND) if primary else ("#ffffff", BRAND, LINE)
-    return (f"<a href='{e(href)}' style='display:inline-block;{F}font-size:13px;font-weight:600;color:{fg};background:{bg};"
-            f"border:1px solid {bd};border-radius:8px;padding:7px 12px;margin:6px 6px 0 0;text-decoration:none'>{e(label)}</a>")
-
-
 def copy_button(text, preview, label="Copy"):
     if not preview:
         return ""
-    return (f"<button onclick=\"navigator.clipboard.writeText(this.dataset.t);this.textContent='Copied'\" data-t='{e(text)}' "
+    return (f"<button onclick='copyText(this)' data-t='{e(text)}' "
             f"style='{F}font-size:13px;font-weight:600;color:#fff;background:{BRAND};border:0;border-radius:8px;padding:8px 12px;"
             f"margin:6px 6px 0 0;cursor:pointer'>{e(label)}</button>")
 
@@ -111,12 +105,6 @@ def quote(q):
     return (f"<div style='background:{BG};border-radius:10px;padding:10px 14px;margin:10px 0 0'>"
             f"<div style='{F}font-size:14px;line-height:1.55;color:{INK}'>&ldquo;{e(q['text'])}&rdquo;</div>"
             f"<div style='{F}font-size:12px;color:{MUTED};margin-top:4px'>{meta}{link}</div></div>")
-
-
-def mailto(a):
-    tk = a.get("ticket") or {}
-    body = f"{a['detail']}\n\nDraft ticket: {tk.get('title', '')}\n{tk.get('body', '')}\n\nFrom the {NAME} ({x['meta']['windowLabel']})."
-    return "mailto:?" + urllib.parse.urlencode({"subject": f"{NAME}: {a['title']}", "body": body}, quote_via=urllib.parse.quote)
 
 
 def ticket(a, preview):
@@ -195,27 +183,12 @@ def body(preview, img):
     if S.get("capped"):
         rows.append(f"<tr><td style='padding:8px 24px 0'><div style='{F}font-size:12px;color:{MUTED}'>Read the {t['items']} most recent items in the window.</div></td></tr>")
 
-    if x.get("actions"):
-        rows.append(section("Things to act on", "Ranked by impact, reach and growth"))
-        for n, a in enumerate(x["actions"], 1):
-            rows.append(card(
-                f"<table role='presentation' width='100%' cellpadding='0' cellspacing='0'><tr>"
-                f"<td width='40' valign='top'><div style='{F}width:30px;height:30px;border-radius:15px;background:{ACCENT};color:#fff;"
-                f"font-weight:700;font-size:15px;line-height:30px;text-align:center'>{n}</div></td>"
-                f"<td valign='top'><div style='{F}font-size:16px;font-weight:700;color:{INK}'>{e(a['title'])}</div>"
-                f"<div style='{F}font-size:14px;line-height:1.55;color:{INK};margin-top:4px'>{e(a['detail'])}</div>"
-                f"<div style='{F}font-size:12px;color:{MUTED};margin-top:6px'>Owner: {e(a['owner'])}</div>"
-                + ticket(a, preview)
-                + f"<div>{button('Email the owner', mailto(a), primary=True)}{button('See the evidence', '#' + a['theme'])}</div>"
-                f"</td></tr></table>"))
-
+    if img("map.png"):
+        rows.append(section("Feedback map", "Each dot is one piece of feedback, placed near similar feedback and coloured by theme"))
+        rows.append(card(f"<img src='{img('map.png')}' width='544' alt='Every item placed by similarity, coloured by theme' style='width:100%;height:auto;display:block'/>"
+                         f"<div style='{F}font-size:12px;color:{MUTED};margin-top:6px'>Grouped with K-means on word vectors. Grey dots fit no theme.</div>"))
     rows.append(section("At a glance"))
     rows.append(card(volume_chart() + themes_chart()))
-    if img("map.png"):
-        rows.append(card(f"<div style='{F}font-size:13px;font-weight:600;color:{INK};margin-bottom:8px'>Feedback map</div>"
-                         f"<img src='{img('map.png')}' width='544' alt='Every item placed by similarity, coloured by theme' style='width:100%;height:auto;display:block'/>"
-                         f"<div style='{F}font-size:12px;color:{MUTED};margin-top:6px'>Each dot is one piece of feedback, placed near similar feedback "
-                         f"(K-means on word vectors) and coloured by theme. Grey dots fit no theme.</div>"))
 
     rows.append(section("What customers are saying", "Every quote is word for word, with its source"))
     for th in x["themes"]:
@@ -233,6 +206,20 @@ def body(preview, img):
             + "".join(quote(q) for q in th["quotes"])
             + f"<div style='{F}font-size:12px;color:{MUTED};margin-top:10px'>Sources: {srcs}</div>",
             accent=KIND.get(s["kind"], BRAND)))
+
+    if x.get("actions"):
+        rows.append(section("Things to act on", "Ranked by impact, reach and growth, each with a draft ticket for the owning team"))
+        for n, a in enumerate(x["actions"], 1):
+            rows.append(card(
+                f"<table role='presentation' width='100%' cellpadding='0' cellspacing='0'><tr>"
+                f"<td width='40' valign='top'><div style='{F}width:30px;height:30px;border-radius:15px;background:{ACCENT};color:#fff;"
+                f"font-weight:700;font-size:15px;line-height:30px;text-align:center'>{n}</div></td>"
+                f"<td valign='top'><div style='{F}font-size:16px;font-weight:700;color:{INK}'>{e(a['title'])}</div>"
+                f"<div style='{F}font-size:14px;line-height:1.55;color:{INK};margin-top:4px'>{e(a['detail'])}</div>"
+                f"<div style='{F}font-size:12px;color:{MUTED};margin-top:6px'>Owner: {e(a['owner'])}</div>"
+                + ticket(a, preview)
+                + f"</td></tr></table>"))
+
 
     rows.append(section("Ask your agent"))
     rows.append(card(f"<div style='{F}font-size:14px;line-height:1.7;color:{INK}'>"
@@ -256,6 +243,21 @@ def body(preview, img):
     return "".join(rows)
 
 
+COPY_JS = """<script>
+function copyText(b) {
+  var t = b.getAttribute('data-t'), label = b.textContent;
+  function done() { b.textContent = 'Copied'; setTimeout(function () { b.textContent = label; }, 1500); }
+  function fallback() {  // file:// pages and embedded previews often block the clipboard API
+    var a = document.createElement('textarea'); a.value = t; a.style.position = 'fixed'; a.style.opacity = '0';
+    document.body.appendChild(a); a.focus(); a.select();
+    try { document.execCommand('copy') ? done() : (b.textContent = 'Press Ctrl+C'); } catch (e) { b.textContent = 'Press Ctrl+C'; }
+    document.body.removeChild(a);
+  }
+  if (navigator.clipboard && window.isSecureContext) { navigator.clipboard.writeText(t).then(done, fallback); } else { fallback(); }
+}
+</script>"""
+
+
 def page(img, preview=False):
     css = ("@media (max-width:620px){.wrap{width:100%!important}.stat{display:block!important;width:100%!important;"
            "border-bottom:1px solid " + LINE + "}}")
@@ -265,7 +267,7 @@ def page(img, preview=False):
                  f"<b>Subject:</b> {e(x['subject'])}<br/><b>To:</b> {e(cfg['recipient'])} &middot; "
                  f"<b>Preview line:</b> {e(x['preheader'])}</div>")
     return (f"<!doctype html><html><head><meta charset='utf-8'/><meta name='viewport' content='width=device-width,initial-scale=1'/>"
-            f"<title>{e(x['subject'])}</title><style>{css}</style></head>"
+            f"<title>{e(x['subject'])}</title><style>{css}</style>{COPY_JS if preview else ''}</head>"
             f"<body style='margin:0;padding:24px 0;background:{BG};background-image:linear-gradient(180deg,{TINT} 0px,{BG} 420px)'>{strip}"
             f"<div style='display:none;max-height:0;overflow:hidden'>{e(x['preheader'])}</div>"
             f"<table role='presentation' class='wrap' width='640' align='center' cellpadding='0' cellspacing='0' "
@@ -298,6 +300,8 @@ def markdown():
         nums.append(f"**{t['lowShare']}%** at one or two stars")
     reads = ", ".join(f"[{c['label']}]({c['link']})" if c.get("link") else c["label"] for c in S.get("connections", []))
     out += [" · ".join(nums), f"Read from: {reads}", ""]
+    if os.path.exists("out/map.png"):
+        out += ["![Feedback map](map.png)", ""]
     if os.path.exists("out/map.png"):
         out += ["![Feedback map](map.png)", ""]
     if x.get("actions"):

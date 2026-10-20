@@ -9,7 +9,7 @@
 3. **If there is none, go straight into setup.** Do not describe the project, list features or explain how it works. Write one line of context and the **first setup question only**, for example:
    > *I'll set up your weekly customer feedback brief. First, what's your product or company, and who will read the brief? (Or say **demo** to see one for Capital Bank of Australia, a fictional bank.)*
 
-   Then follow [setup/SKILL.md](setup/SKILL.md), **one question per message**.
+   Then follow [setup/SKILL.md](setup/SKILL.md): ask **all six** setup questions, one per message, before building anything.
 
 Only explain how the project works if the user asks.
 
