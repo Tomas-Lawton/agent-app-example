@@ -23,7 +23,7 @@ Keep everything inside the project folder and your harness's sandbox, so nothing
 2. **Connections.** Ask what they use for customer feedback, and show the common providers below as examples; they can name any other. Every answer fits one of three kinds (`scope.json` → `connectionTypes`): an **online service**, an **internal warehouse or data store**, or a **file**.
    > Helpdesks: Zendesk, Intercom, Freshdesk, Jira Service Management, HubSpot · Issue trackers and forums: GitHub Issues, Discourse, Reddit · Surveys and reviews: Typeform, SurveyMonkey, Trustpilot, Canny, App Store · Your warehouse: BigQuery · Or any export file
 3. **Time window:** how much feedback each brief covers (default the last 7 days, a weekly brief; up to 31).
-4. **Output format:** in the chat, by email, or both. Then ask where their teams track work (GitHub, Linear or Jira, or none), so each draft ticket gets a one-click Create button that opens it pre-filled; nothing is filed for them.
+4. **Output format:** both, in the chat and by email, is the default: offer it and ask for the email details (see Email below). Chat only or email only if they prefer. Then ask where their teams track work (GitHub, Linear or Jira, or none), so each draft ticket gets a one-click Create button that opens it pre-filled; nothing is filed for them.
 5. **Schedule:** on request, or automatically (for example "every Monday at 8am").
 6. **Look** (optional): the brief's name and colours.
 
@@ -44,7 +44,7 @@ The user names their tools; you work out the connection. Never offer write acces
      ---
      **Who it's for.** ... **What matters.** ... **Tone.** ... **Standing instructions.** ...
      ```
-     `output` is exactly `chat`, `email` or `both`, from question 4. `tickets` is optional: `github owner/repo`, `linear TEAM` or `jira https://site.atlassian.net <project id>`. `icon` is optional: a logo image address. Write each value on its own, with no notes after it. Write the free text in the user's words: who reads it, what matters, what is urgent, what to keep apart, how to route tickets, the tone. Never invent facts about the company.
+     `output` is exactly `chat`, `email` or `both`, from question 4 (`both` unless they chose otherwise; it is also the default when the setting is missing). `tickets` is optional: `github owner/repo`, `linear TEAM` or `jira https://site.atlassian.net <project id>`. `icon` is optional: a logo image address. Write each value on its own, with no notes after it. Write the free text in the user's words: who reads it, what matters, what is urgent, what to keep apart, how to route tickets, the tone. Never invent facts about the company.
    - **`user_scope.json`**, what the brief may reach, which only setup writes (see the next step). It is a separate file on purpose: a profile can change how the brief looks, never what it can reach.
 2. **If any connection is private** (a warehouse, a keyed service, a private file), ask one more question: *"Can the brief quote that feedback word for word? Yes is usual when the brief stays inside the company; no means themes are described and cited, but not quoted."* Set `privateQuotes` from the answer.
    Write `user_scope.json`: `{"timezone": "Australia/Sydney", "recipients": ["reader@company.com"], "sources": [...], "privateQuotes": false, "schedule": null}`, with each connection below in `sources`. Test each one by running `python3 engine/steps/collect.py <key>` and showing the user a few items from `items.json`; keep it only when they confirm.

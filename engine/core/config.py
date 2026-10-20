@@ -65,7 +65,7 @@ def profile(key):
     window = raw.get("time window", "7").split()[0]
     return raw, {"product": {"name": raw.get("product", key), "iconUrl": raw.get("icon") or None},
                  "reader": raw.get("reader", ""), "windowDays": int(window) if window.isdigit() else 7,
-                 "delivery": raw.get("output", "chat").lower(), "wording": {"briefName": raw.get("brief name", "Customer Feedback Brief")},
+                 "delivery": (raw.get("output") or "both").lower(), "wording": {"briefName": raw.get("brief name", "Customer Feedback Brief")},
                  "theme": colours, "tickets": raw.get("tickets", "").split()}
 
 
