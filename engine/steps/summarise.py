@@ -24,7 +24,9 @@ if not os.path.exists("themes.json"):
 data = json.load(open("themes.json"))
 
 tags = {}
-for p in sorted(glob.glob("tags/part_*.json")):
+for p in ["tags/carried.json"] + sorted(glob.glob("tags/part_*.json")):  # this run's tags override carried ones
+    if not os.path.exists(p):
+        continue
     for iid, tids in json.load(open(p)).items():
         tags[iid] = [tids] if isinstance(tids, str) else list(tids or [])
 missing = [i for i in by_id if i not in tags]

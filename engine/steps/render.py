@@ -447,8 +447,9 @@ def draw_map():
         return False
     pos = json.load(open("clusters.json"))["positions"]
     tags = {}
-    for p in sorted(glob.glob("tags/part_*.json")):
-        tags.update(json.load(open(p)))
+    for p in ["tags/carried.json"] + sorted(glob.glob("tags/part_*.json")):
+        if os.path.exists(p):
+            tags.update(json.load(open(p)))
     shown = [th["id"] for th in x["themes"]]
     palette = [BRAND, ACCENT, "#c2410c", "#7c3aed", "#15803d", "#0891b2", "#be185d", "#4d7c0f"]
     colour = {tid: palette[n % len(palette)] for n, tid in enumerate(shown)}
@@ -517,8 +518,9 @@ open("out/evidence.html", "w").write(f"<!doctype html><html><head><meta charset=
 json.dump(CLAIMS, open("out/claims.json", "w"), indent=1, ensure_ascii=False)
 log = [json.loads(l) for l in open("checks_log.jsonl")] if os.path.exists("checks_log.jsonl") else []
 tags_all = {}
-for p_ in sorted(glob.glob("tags/part_*.json")):
-    tags_all.update(json.load(open(p_)))
+for p_ in ["tags/carried.json"] + sorted(glob.glob("tags/part_*.json")):
+    if os.path.exists(p_):
+        tags_all.update(json.load(open(p_)))
 agent_sentences = sum(len(checks.sentences(v)) for v in [t.get("summary") for t in x["themes"]] + [a.get("detail") for a in x.get("actions") or []]
                       + [(a.get("ticket") or {}).get("body") for a in x.get("actions") or []])
 metrics = {
@@ -529,6 +531,9 @@ metrics = {
     "claims": len(CLAIMS), "claimsVerified": sum(1 for c in CLAIMS if VERDICTS.get(c["id"], {}).get("supported")),
     "claimsUnsupported": [c["id"] for c in CLAIMS if c["id"] in VERDICTS and not VERDICTS[c["id"]].get("supported")],
     "checkFailuresCaught": sum(len(r["errors"]) for r in log), "checkRunsFailed": len(log),
+    "tagsCarried": len(json.load(open("tags/carried.json"))) if os.path.exists("tags/carried.json") else 0,
+    "minutes": round((datetime.datetime.now().astimezone() - datetime.datetime.fromisoformat(info["startedAt"])).total_seconds() / 60, 1) if info.get("startedAt") else None,
+    "usage": json.load(open("usage.json")) if os.path.exists("usage.json") else None,  # tokens, if the harness reports them
 }
 json.dump(metrics, open("out/metrics.json", "w"), indent=2)
 html_part = page(lambda name: f"cid:{cids[name]}" if name in cids else "")

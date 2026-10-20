@@ -11,7 +11,7 @@ Needs scikit-learn (requirements.txt).
 """
 import os, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # engine/
-import json
+import glob, json
 from core import config
 
 try:
@@ -50,6 +50,21 @@ json.dump({"clusters": clusters, "positions": {items[n]["id"]: xy[n] for n in ra
           open("clusters.json", "w"), indent=1)
 
 by_id = {i["id"]: i for i in items}
+# carry tags from the previous run for items seen before (same connection and original id), so only new items need tagging
+carried = {}
+if info.get("previous"):
+    prev = os.path.join(config.ROOT, info["previous"])
+    if os.path.exists(os.path.join(prev, "items.json")):
+        old_ids = {(i["source"], str(i.get("nativeId"))): i["id"] for i in json.load(open(os.path.join(prev, "items.json")))["items"]}
+        old_tags = {}
+        for p_ in glob.glob(os.path.join(prev, "tags", "*.json")):
+            old_tags.update(json.load(open(p_)))
+        for i in items:
+            old = old_ids.get((i["source"], str(i.get("nativeId"))))
+            if old in old_tags:
+                carried[i["id"]] = old_tags[old]
+os.makedirs("tags", exist_ok=True)
+json.dump(carried, open("tags/carried.json", "w"), indent=1)
 lines = []
 for cl in clusters:
     lines.append(f"## Cluster {cl['id']} ({cl['size']} items): {', '.join(cl['terms'])}")
@@ -57,7 +72,8 @@ for cl in clusters:
         i = by_id[iid]
         rating = f"{i['rating']:g}/{i['ratingScale']}" if i.get("rating") is not None else "-"
         text = (f"{i['title']}: " if i.get("title") else "") + i["text"]
-        lines.append(f"{iid} | {i['date']} | {rating}{' | private' if i.get('private') else ''} | {text[:c['textChars']]}")
+        was = f" | tagged last run: {', '.join(carried[iid]) or 'none'}" if iid in carried else ""
+        lines.append(f"{iid} | {i['date']} | {rating}{' | private' if i.get('private') else ''}{was} | {text[:c['textChars']]}")
 os.makedirs("reading", exist_ok=True)
 for f in os.listdir("reading"):
     os.remove(os.path.join("reading", f))
@@ -72,5 +88,6 @@ if count or part:
 parts = sorted(os.listdir("reading"))
 for cl in clusters:
     print(f"cluster {cl['id']}: {cl['size']:>4} items  {', '.join(cl['terms'][:6])}")
-print(f"{len(items)} items in {len(clusters)} clusters -> clusters.json, reading/ ({len(parts)} parts)")
+print(f"{len(items)} items in {len(clusters)} clusters -> clusters.json, reading/ ({len(parts)} parts); "
+      f"{len(carried)} keep their tags from the previous run (tags/carried.json)")
 print(f"next: read every part in reading/, write themes.json, tag every item in tags/, then run: python3 engine/steps/summarise.py {cfg['key']}")

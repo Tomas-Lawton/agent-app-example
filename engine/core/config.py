@@ -125,7 +125,7 @@ def start_run(key):
     short = lambda d: f"{d.day} {d.strftime('%b')}"
     info = {"key": key, "date": today.isoformat(), "dateLabel": f"{now.strftime('%A')} {now.day} {now.strftime('%B %Y')}",
             "since": since.isoformat(), "until": today.isoformat(), "windowLabel": f"{short(since)} to {short(today)} {today.year}",
-            "previous": previous, "folder": os.path.relpath(run, ROOT)}
+            "previous": previous, "folder": os.path.relpath(run, ROOT), "startedAt": now.isoformat(timespec="seconds")}
     json.dump(info, open(os.path.join(run, "run.json"), "w"), indent=2)
     os.chdir(run)
     return cfg, info

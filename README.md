@@ -28,7 +28,7 @@ You get it **in the chat**, **by email**, or both, over the time window you choo
    - **Time window:** how much feedback each brief covers (default the last 7 days)
    - **Output format:** chat, email or both. For email, it asks for a sending address and an app password
    - **Schedule:** on request, or for example "every Monday at 8am". On Google Cloud, the agent deploys the scheduled run itself
-4. **The agent runs your first brief** and presents it. After that, just ask: *"run this week's brief"*, *"make it shorter"*, *"add our survey export"*.
+4. **The agent runs your first brief** and presents it. Then keep asking: *"why is the top theme growing?"*, *"show me every scam report"* (answered from the evidence, with citations), or *"run this week's brief"*, *"make it shorter"*, *"add our survey export"*.
 
 **Requirements:** an agent harness, Python 3.9 or newer, and `scikit-learn` and `matplotlib` (the agent installs them from `requirements.txt`). Optional: Google Cloud for a BigQuery connection or scheduled runs.
 
@@ -82,7 +82,9 @@ Safety is designed into the use case, not left to the agent:
 - **The rules can't be quietly changed:** setup commits your user scope once you confirm it, and you push it with your own access. The send gate refuses to send if the engine, the skill or your user scope differ from the shared repository, so a change only counts once someone with write access accepts it; the agent never pushes. In Claude Code, [`.claude/settings.json`](.claude/settings.json) also denies edits to the engine and asks you before any change to a user scope.
 - **Scheduled runs** carry only the run skill, never the setup skill, so an unattended agent has no instructions for changing its own reach. On Google Cloud it runs as its own least privilege service account, narrower than the person who set it up.
 
-Every run also writes `out/metrics.json`: items tagged, quotes verified, sentences cited, claims verified, and how many problems the checks caught and the agent fixed.
+Every run also writes `out/metrics.json`: items tagged, quotes verified, sentences cited, claims verified, how many problems the checks caught and the agent fixed, run time, and tokens when the harness reports them.
+
+**Cost:** scripts do all the predictable work (collecting, grouping, counting, checking, rendering) with no model tokens; items reach the model as compact lines; tags carry over from the previous run; and routine tagging and verification can run on a smaller, faster model. A harness costs more per run than a coded workflow but far less to build and change, which suits infrequent, high value, varied work like this brief.
 
 **Limit:** code proves a citation exists and belongs; whether it truly supports the claim is judged by the verifier and, finally, by the reader, one click away.
 
