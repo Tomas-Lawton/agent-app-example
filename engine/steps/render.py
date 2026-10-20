@@ -329,6 +329,15 @@ def body(preview, img):
         + stat("Connections", f"{S['sources']['ok']} of {sum(S['sources'].values())}", f"{S['sources']['blocked']} blocked" if S["sources"]["blocked"] else "all read")
         + "</tr></table></td></tr>",
     ]
+    if not preview:  # an email can't run scripts: link to the interactive versions, when there are real ones
+        ss, base = x.get("session") or {}, config.env("BRIEF_PREVIEW_BASE")
+        links = ""
+        if base:  # a scheduled run's hosted preview (Cloud Storage, behind sign-in)
+            links += link_button(f"{base.rstrip('/')}/{info['folder'].split('runs/', 1)[-1]}/out/preview.html", "Open the interactive version")
+        if ss.get("url"):
+            links += link_button(ss["url"], "Continue in your agent")
+        if links:
+            rows.append(f"<tr><td style='padding:14px 24px 0'>{links}</td></tr>")
     chips = []
     for c in S.get("connections", []):
         ok = c["status"] == "ok"
@@ -446,11 +455,13 @@ def body(preview, img):
     return "".join(rows)
 
 
-def evidence_row(i, n=None):
+def evidence_row(i, n=None, short=False):
     it = items.get(i, {})
     num = f"<b>[{n}]</b> " if n else ""
     link = f" &middot; <a href='{e(it['url'])}' style='color:{BRAND}'>open</a>" if it.get("url") else ""
     text = (f"{it['title']}: " if it.get("title") else "") + it.get("text", "")
+    if short and len(text) > 120:  # one line per item in the email; the full text is in the preview and the run
+        text = text[:117].rsplit(" ", 1)[0] + "…"
     return (f"<tr id='ev-{e(i)}'><td style='{F}font-size:12px;line-height:1.5;color:{INK};padding:6px 0;border-top:1px solid {LINE}'>"
             f"{num}{source_tag(it.get('source'))}<span style='color:{MUTED}'>{e(i)} &middot; {e(it.get('date'))} "
             f"{stars(it.get('rating'), it.get('ratingScale'))}{link}</span><br/>{e(text)}</td></tr>")
@@ -458,11 +469,14 @@ def evidence_row(i, n=None):
 
 def evidence(preview):
     """The items the brief cites, numbered. Everything collected stays with the run, for the agent to answer questions from."""
-    cited = "".join(evidence_row(i, n) for n, i in enumerate(CITED, 1))
+    cited = "".join(evidence_row(i, n, short=not preview) for n, i in enumerate(CITED, 1))
+    table = f"<table role='presentation' width='100%' cellpadding='0' cellspacing='0'>{cited}</table>"
+    if preview:  # collapsed until opened; clicking a citation opens it (COPY_JS)
+        table = (f"<details id='evidence-list'><summary style='{F}font-size:13px;font-weight:600;color:{BRAND};cursor:pointer'>"
+                 f"Show the {len(CITED)} cited items</summary>{table}</details>")
     more = (f"<div style='{F}font-size:12px;color:{MUTED};margin-top:8px'>All {len(items)} items collected are kept with this run; "
             f"ask your agent about any of them.</div>")
-    return (section("Evidence", "Every item the brief cites") + card(
-            f"<table role='presentation' width='100%' cellpadding='0' cellspacing='0'>{cited}</table>{more}"))
+    return section("Evidence", "Every item the brief cites") + card(table + more)
 
 
 COPY_JS = """<script>
@@ -477,6 +491,10 @@ function copyText(b) {
   }
   if (navigator.clipboard && window.isSecureContext) { navigator.clipboard.writeText(t).then(done, fallback); } else { fallback(); }
 }
+document.addEventListener('click', function (ev) {  // a citation opens the collapsed evidence list before jumping to it
+  var a = ev.target.closest && ev.target.closest('a[href^="#ev-"]'), d = document.getElementById('evidence-list');
+  if (a && d) { d.open = true; }
+});
 </script>"""
 
 
