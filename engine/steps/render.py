@@ -353,24 +353,32 @@ function copyText(b) {
 </script>"""
 
 
+def mix(a, b, w):
+    """Blend two hex colours: w=0 gives a, w=1 gives b."""
+    a, b = [[int(c.lstrip("#")[k:k + 2], 16) for k in (0, 2, 4)] for c in (a, b)]
+    return "#" + "".join(f"{round(x + (y - x) * w):02x}" for x, y in zip(a, b))
+
+
 def page(img, preview=False):
+    DEEP = mix(BRAND, "#000000", .35)  # the primary colour, a bit darker
     css = ("@media (max-width:620px){.wrap{width:100%!important}.stat{display:block!important;width:100%!important;"
            "border-bottom:1px solid " + LINE + "}}")
     strip = ""
     if preview:
-        strip = (f"<div style='{F}width:92%;max-width:1100px;margin:0 auto 12px;font-size:12px;color:{MUTED}'>"
+        strip = (f"<div style='{F}width:92%;max-width:1100px;margin:0 auto 12px;font-size:12px;color:#ffffff'>"
                  f"<b>Subject:</b> {e(x['subject'])}<br/><b>To:</b> {e(cfg['recipient'])} &middot; "
                  f"<b>Preview line:</b> {e(x['preheader'])}</div>")
     return (f"<!doctype html><html><head><meta charset='utf-8'/><meta name='viewport' content='width=device-width,initial-scale=1'/>"
             f"<title>{e(x['subject'])}</title><style>{css}</style>{COPY_JS if preview else ''}</head>"
-            f"<body style='margin:0;padding:24px 0;background:{BG};background-image:linear-gradient(180deg,{TINT} 0px,{BG} 420px)'>{strip}"
+            f"<body style='margin:0;padding:24px 0;min-height:100vh;background:{DEEP};"
+            f"background-image:linear-gradient(135deg,{DEEP} 0%,{BRAND} 50%,{mix(BRAND, ACCENT, .45)} 100%);background-attachment:fixed'>{strip}"
             f"<div style='display:none;max-height:0;overflow:hidden'>{e(x['preheader'])}</div>"
             + (f"<table role='presentation' class='wrap' width='100%' align='center' cellpadding='0' cellspacing='0' "
                f"style='width:92%;max-width:1100px;margin:0 auto;background:{BG};border-radius:16px;overflow:hidden;"
                if preview else
                f"<table role='presentation' class='wrap' width='640' align='center' cellpadding='0' cellspacing='0' "
                f"style='width:640px;max-width:640px;margin:0 auto;background:{BG};border-radius:16px;overflow:hidden;")
-            + f"box-shadow:0 10px 30px rgba(16,24,40,.08)'>{body(preview, img)}</table></body></html>")
+            + f"box-shadow:0 24px 60px rgba(0,0,0,.35),0 4px 14px rgba(0,0,0,.18)'>{body(preview, img)}</table></body></html>")
 
 
 def text():
