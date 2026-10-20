@@ -10,7 +10,6 @@ coloured by the agent's theme) with matplotlib. Writes:
   out/map.png        the feedback map (colour shows the theme, shape shows the connection)
   out/header.png     header artwork in the profile's colours (or the profile's own assets/header.png)
   out/preview.html   the full visual brief, with copy buttons and every item collected
-  out/evidence.html  every item, numbered as cited (attached to the email)
   out/claims.json    every cited sentence with the text of its items, for the independent verifier
   out/metrics.json   grounding, coverage and guardrail numbers for this run
   out/email.html, out/email.txt, out/email.eml   the email
@@ -217,7 +216,10 @@ def themes_chart():
     legend = " ".join(f"<span style='color:{c}'>&#9632; {k}</span>" for k, c in KIND.items())
     return (f"<div style='{F}font-size:13px;font-weight:600;color:{INK};margin:20px 0 8px'>Items per theme</div>"
             f"<table role='presentation' width='100%' cellpadding='0' cellspacing='0'>{rows}</table>"
-            f"<div style='{F}font-size:12px;color:{MUTED};margin-top:6px'>{legend}</div>")
+            f"<div style='{F}font-size:12px;color:{MUTED};margin-top:6px'>{legend}</div>"
+            f"<div style='{F}font-size:12px;line-height:1.5;color:{MUTED};margin-top:4px'>The agent gives each theme a kind after reading "
+            f"its feedback: <b>problem</b>, something broken or in the way; <b>request</b>, something customers want added or changed; "
+            f"<b>praise</b>, something working well; <b>question</b>, customers unsure how something works.</div>")
 
 
 def body(preview, img):
@@ -275,7 +277,6 @@ def body(preview, img):
             f"<div style='{F}font-size:12px;color:{MUTED};margin-top:3px'>{size}{prev}{rating}</div>"
             f"<div style='{F}font-size:14px;line-height:1.55;color:{INK};margin-top:8px'>{cite(th['summary'])}</div>"
             + label("interpretation", f"theme {th['id']}", len(set(checks.citations(th['summary']))))
-            + f"<div style='margin-top:10px'>{label('checked')}</div>"
             + "".join(quote(q) for q in th["quotes"])
             + f"<div style='{F}font-size:12px;color:{MUTED};margin-top:10px'>From {srcs}</div>",
             accent=KIND.get(s["kind"], BRAND)))
@@ -329,13 +330,11 @@ def evidence_row(i, n=None):
 
 
 def evidence(preview):
-    """The items the brief cites, numbered; the preview and evidence.html also list every item collected."""
+    """The items the brief cites, numbered. Everything collected stays with the run, for the agent to answer questions from."""
     cited = "".join(evidence_row(i, n) for n, i in enumerate(CITED, 1))
-    every = "".join(evidence_row(i) for i in items if i not in CITED) if preview else ""
-    more = (f"<div style='{F}font-size:13px;font-weight:700;color:{INK};margin:18px 0 4px'>Every other item collected ({len(items) - len(CITED)})</div>"
-            f"<table role='presentation' width='100%' cellpadding='0' cellspacing='0'>{every}</table>") if preview else (
-            f"<div style='{F}font-size:12px;color:{MUTED};margin-top:8px'>Every item collected is in the attached evidence.html.</div>")
-    return (section("Evidence", "Every item the brief cites, then everything collected") + card(
+    more = (f"<div style='{F}font-size:12px;color:{MUTED};margin-top:8px'>All {len(items)} items collected are kept with this run; "
+            f"ask your agent about any of them.</div>")
+    return (section("Evidence", "Every item the brief cites") + card(
             f"<table role='presentation' width='100%' cellpadding='0' cellspacing='0'>{cited}</table>{more}"))
 
 
@@ -453,27 +452,31 @@ def draw_map():
     shown = [th["id"] for th in x["themes"]]
     palette = [BRAND, ACCENT, "#c2410c", "#7c3aed", "#15803d", "#0891b2", "#be185d", "#4d7c0f"]
     colour = {tid: palette[n % len(palette)] for n, tid in enumerate(shown)}
-    fig, ax = plt.subplots(figsize=(8, 4.8), dpi=160)
+    fig, ax = plt.subplots(figsize=(8, 5.6), dpi=160)
     fig.patch.set_facecolor("white"); ax.set_facecolor(TINT)
     for iid, (px, py) in pos.items():
         tid = next((t for t in (tags.get(iid) or []) if t in colour), None)
         _, marker, _ = SRC_STYLE.get(items.get(iid, {}).get("source"), ("", "o", ""))
         ax.scatter(px, py, s=26 if tid else 12, marker=marker, color=colour.get(tid, "#c3cad3"), alpha=.9 if tid else .5,
                    edgecolors="white", linewidths=.4, zorder=3 if tid else 2)
-    for tid in shown:  # the theme's name at the centre of its points
+    keys = []
+    for n, tid in enumerate(shown, 1):  # a small number at the centre of each theme's points; the names go in the key below
         pts = [pos[i] for i in pos if tid in (tags.get(i) or [])]
         if pts:
             cx, cy = sum(p[0] for p in pts) / len(pts), sum(p[1] for p in pts) / len(pts)
-            ax.annotate(themes_by_id[tid]["title"][:34], (cx, cy), fontsize=7.5, fontweight="bold", color=colour[tid], ha="center",
-                        va="center", zorder=4, bbox=dict(boxstyle="round,pad=0.3", fc="white", ec=colour[tid], lw=.8, alpha=.92))
+            ax.annotate(str(n), (cx, cy), fontsize=8, fontweight="bold", color="white", ha="center", va="center", zorder=4,
+                        bbox=dict(boxstyle="circle,pad=0.3", fc=colour[tid], ec="white", lw=1))
+        keys.append(plt.Line2D([], [], marker="o", color=colour[tid], linestyle="", markersize=7,
+                               label=f"{n}. {themes_by_id[tid]['title'][:60]}"))
     handles = [plt.Line2D([], [], marker=SRC_STYLE[c["id"]][1], color="#55606e", linestyle="", markersize=6, label=c["label"])
                for c in S.get("connections", []) if c["id"] in SRC_STYLE]
-    ax.legend(handles=handles, loc="lower right", frameon=True, fontsize=7.5, framealpha=.9, title="Shape = source", title_fontsize=7.5)
+    ax.add_artist(ax.legend(handles=handles, loc="upper right", frameon=True, fontsize=7.5, framealpha=.9, title="Shape = source", title_fontsize=7.5))
+    ax.legend(handles=keys, loc="upper center", bbox_to_anchor=(.5, -.02), ncol=2, frameon=False, fontsize=7.5, handletextpad=.3, columnspacing=1.2)
     ax.set_xticks([]); ax.set_yticks([])
     for side in ax.spines.values():
         side.set_visible(False)
     fig.tight_layout()
-    fig.savefig("out/map.png", facecolor="white")
+    fig.savefig("out/map.png", facecolor="white", bbox_inches="tight")
     plt.close(fig)
     return True
 
@@ -513,8 +516,6 @@ uri = lambda name: ("data:image/png;base64," + base64.b64encode(open(f"out/{name
 html_preview = page(uri, preview=True)  # first render numbers the citations
 open("out/brief.md", "w").write(markdown())
 open("out/preview.html", "w").write(html_preview)
-open("out/evidence.html", "w").write(f"<!doctype html><html><head><meta charset='utf-8'/><title>Evidence</title></head><body style='margin:24px;background:{BG}'>"
-                                     f"<table role='presentation' width='100%' style='max-width:1000px;margin:0 auto'>{evidence(True)}</table></body></html>")
 json.dump(CLAIMS, open("out/claims.json", "w"), indent=1, ensure_ascii=False)
 log = [json.loads(l) for l in open("checks_log.jsonl")] if os.path.exists("checks_log.jsonl") else []
 tags_all = {}
@@ -544,7 +545,6 @@ m["Subject"], m["To"] = x["subject"], cfg["recipient"]
 m["Date"] = format_datetime(datetime.datetime.now().astimezone())
 m.set_content(text())
 m.add_alternative(html_part, subtype="html")
-m.add_attachment(open("out/evidence.html", "rb").read(), "text", "html", filename="evidence.html")
 for name, cid in cids.items():
     m.get_payload()[1].add_related(open(f"out/{name}", "rb").read(), "image", "png", cid=f"<{cid}>", disposition="inline", filename=name)
 open("out/email.eml", "wb").write(bytes(m))

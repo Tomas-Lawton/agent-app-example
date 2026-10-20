@@ -134,7 +134,12 @@ def content(cfg, info):
         if i not in by_id: err.append(f"`headline` cites `{i}`, which is not a collected item")
     for k, t in enumerate(x.get("themes") or []):
         ev = {(e.get("item"), norm(e.get("quote"))) for e in (kept.get(t.get("id")) or {}).get("evidence") or []}
-        if not 1 <= len(t.get("quotes") or []) <= lim["maxQuotesPerTheme"]: err.append(f"`themes[{k}]` shows 1 to {lim['maxQuotesPerTheme']} quotes")
+        want = min(lim["maxQuotesPerTheme"], len(ev))
+        if not max(1, want) <= len(t.get("quotes") or []) <= lim["maxQuotesPerTheme"]:
+            err.append(f"`themes[{k}]` shows {want} quotes (it has {len(ev)} checked quotes; the most shown is {lim['maxQuotesPerTheme']})")
+        cited = set(citations(t.get("summary")))
+        for q in t.get("quotes") or []:
+            if q.get("item") not in cited: err.append(f"`themes[{k}].summary` should cite `{q.get('item')}`, the item its quote comes from")
         for j, q in enumerate(t.get("quotes") or []):
             if (q.get("item"), norm(q.get("text"))) not in ev: err.append(f"`themes[{k}].quotes[{j}]` is not one of the theme's checked quotes")
     for k, a in enumerate(x.get("actions") or []):
