@@ -468,7 +468,7 @@ def body(preview, img):
         + (f"url({img('header.png')})" if img("header.png") else f"linear-gradient(135deg,{BRAND} 0%,{BRAND2} 100%)")
         + f";background-size:cover;background-position:center;padding:52px 28px'>"
         f"<table role='presentation' width='100%' cellpadding='0' cellspacing='0'><tr>{icon_td}<td valign='middle'>"
-        f"<div style='{F}font-size:12px;color:#ffffff;opacity:.9;text-transform:uppercase;letter-spacing:1px'>{e(PRODUCT.get('name'))}</div>"
+        f"<div style='{F}font-size:13px;font-weight:800;color:#ffffff;text-transform:uppercase;letter-spacing:1.2px'>{e(PRODUCT.get('name'))}</div>"
         f"<div style='{F}font-size:26px;font-weight:700;color:#ffffff;margin-top:2px'>{e(NAME)}</div>"
         f"<div style='{F}font-size:13px;color:#ffffff;opacity:.9;margin-top:4px'>{e(x['meta']['dateLabel'])} &middot; feedback from {e(x['meta']['windowLabel'])}</div>"
         f"</td></tr></table></td></tr>",
