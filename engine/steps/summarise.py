@@ -103,6 +103,8 @@ for n in range((until - since).days + 1):
     day = [i for i in window if i["date"] == d]
     daily.append({"date": d, "count": len(day), "avgRating": stats(day)["avgRating"]})
 totals = {"items": len(window), "analysed": len(items), **stats(window)}
+stars = [round(five(i)) for i in window if five(i) is not None]  # every rated item in the window, on a 1 to 5 scale
+rating_mix = {str(s): sum(1 for r in stars if max(1, min(5, r)) == s) for s in range(5, 0, -1)} if stars else None
 change = None
 if prev_sum:
     p = prev_sum["totals"]
@@ -115,6 +117,7 @@ kept = sorted((t for t in data["themes"] if t.get("decision") == "keep"), key=la
 summary = {
     "date": info["date"], "window": {"since": info["since"], "until": info["until"], "label": info["windowLabel"]},
     "totals": totals, "capped": meta.get("capped", False),
+    "ratingMix": rating_mix,
     "coverage": {"from": covered.isoformat(), "until": info["until"], "analysed": len(items), "collected": len(window)},
     "untaggedShare": round(100 * untagged / N), "previous": prev_sum["date"] if prev_sum else None, "change": change, "daily": daily,
     "themes": [{"id": t["id"], "title": t["title"], "kind": t.get("kind"),

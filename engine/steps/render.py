@@ -258,6 +258,22 @@ def ticket_text(body):
 
 
 # ---------------------------------------------------------------- the brief
+def mix_chart():
+    """How ratings are spread across the window, 5 stars to 1: an average can hide a split between love and hate."""
+    mix = S.get("ratingMix")
+    if not mix or not sum(mix.values()):
+        return ""
+    total, colour = sum(mix.values()), {"5": "#15803d", "4": "#65a30d", "3": "#ca8a04", "2": "#ea580c", "1": "#b91c1c"}
+    rows = "".join(
+        f"<tr><td width='34' style='{F}font-size:12px;color:{INK};padding:3px 6px 3px 0'>{s}&#9733;</td>"
+        f"<td style='padding:3px 0'><div style='width:{max(2, round(100 * n / total))}%;height:12px;border-radius:6px;background:{colour[s]}'></div></td>"
+        f"<td width='44' align='right' style='{F}font-size:12px;color:{MUTED}'>{round(100 * n / total)}%</td></tr>"
+        for s, n in mix.items())
+    return (f"<div style='{F}font-size:13px;font-weight:600;color:{INK};margin:22px 0 8px'>Rating mix "
+            f"<span style='font-weight:400;color:{MUTED}'>({total} rated items)</span></div>"
+            f"<table role='presentation' width='100%' cellpadding='0' cellspacing='0'>{rows}</table>")
+
+
 def volume_chart():
     days = S["daily"]
     top = max([d["count"] for d in days] + [1])
@@ -330,8 +346,8 @@ def when_text(s):
 def body(preview, img):
     t, ch = S["totals"], S.get("change") or {}
     icon = img("logo.png") or PRODUCT.get("iconUrl")  # optional: the profile's logo, else nothing
-    icon_td = (f"<td width='64' valign='middle'><img src='{e(icon)}' width='52' height='52' alt='' "
-               f"style='display:block;border-radius:12px;border:2px solid rgba(255,255,255,.6)'/></td>") if icon else ""
+    icon_td = (f"<td width='92' valign='middle'><img src='{e(icon)}' width='76' height='76' alt='' "
+               f"style='display:block;border-radius:14px'/></td>") if icon else ""
     rows = [
         f"<tr><td bgcolor='{BRAND}' background='{img('header.png')}' style='background:{BRAND};background-image:"
         + (f"url({img('header.png')})" if img("header.png") else f"linear-gradient(135deg,{BRAND} 0%,{BRAND2} 100%)")
@@ -375,16 +391,15 @@ def body(preview, img):
     if img("map.png"):
         rows.append(section("Feedback map", "Each dot is one piece of feedback, placed near similar feedback and coloured by theme"))
         rows.append(card(f"<img src='{img('map.png')}' width='544' alt='Every item placed by similarity, coloured by theme' style='width:100%;height:auto;display:block'/>"
-                         f"<div style='{F}font-size:12px;color:{MUTED};margin-top:6px'>Grouped with K-means on word vectors. Grey dots fit no theme.</div>"))
+                         f"<div style='{F}font-size:12px;line-height:1.5;color:{MUTED};margin-top:6px'><b>How the map is made:</b> code turns each piece of "
+                         f"feedback into numbers from the words it uses (TF-IDF), compresses them so words that tend to appear together count as "
+                         f"related (LSA), groups similar items with K-means so the agent reads them together, and flattens everything onto two "
+                         f"dimensions (PCA), so feedback that says similar things sits close together. The colours are the agent's themes, "
+                         f"from reading every item; grey dots fit no theme. The axes have no units: only closeness matters.</div>"))
     rows.append(section("At a glance"))
-    rows.append(grid([box(volume_chart()), box(themes_chart())]))
+    rows.append(grid([box(volume_chart() + mix_chart()), box(themes_chart())]))
     if ratings_chart():
         rows.append(card(ratings_chart()))
-    if img("matrix.png"):
-        rows.append(section("Where to focus", "Each theme by how many customers it reaches and how much it hurts them"))
-        rows.append(card(f"<img src='{img('matrix.png')}' width='544' alt='Themes by reach and impact' style='width:100%;height:auto;display:block'/>"
-                         f"<div style='{F}font-size:12px;color:{MUTED};margin-top:6px'>Reach is counted by code; impact is the agent's judgement "
-                         f"(0 to 3, with ease of acting nudging it up). Top right is where to act first.</div>"))
 
     def when(s):
         w = when_text(s)
@@ -414,6 +429,11 @@ def body(preview, img):
     if issues:
         rows.append(section("What customers are saying", "Every quote is word for word, with its source"))
         rows += [full(theme_card(th)) for th in issues]
+    if img("matrix.png"):
+        rows.append(section("Where to focus", "Each theme by how many customers it reaches and how much it hurts them"))
+        rows.append(card(f"<img src='{img('matrix.png')}' width='544' alt='Themes by reach and impact' style='width:100%;height:auto;display:block'/>"
+                         f"<div style='{F}font-size:12px;color:{MUTED};margin-top:6px'>Reach is counted by code; impact is the agent's judgement "
+                         f"(0 to 3, with ease of acting nudging it up). Top right is where to act first.</div>"))
     if working:
         rows.append(section("What's working", "What customers praise: worth passing on to the teams behind it"))
         rows.append(grid([theme_card(th) for th in working]))
@@ -535,9 +555,9 @@ def page(img, preview=False):
            "border-bottom:1px solid " + LINE + "}.col{display:block!important;width:100%!important;padding:0 0 12px 0!important}}")
     strip = ""
     if preview:
+        to = f"<br/><b>To:</b> {e(cfg['recipient'])}" if cfg.get("delivery") in ("email", "both") else ""
         strip = (f"<div style='{F}width:92%;max-width:1100px;margin:0 auto 12px;font-size:12px;color:#ffffff'>"
-                 f"<b>Subject:</b> {e(x['subject'])}<br/><b>To:</b> {e(cfg['recipient'])} &middot; "
-                 f"<b>Preview line:</b> {e(x['preheader'])}</div>")
+                 f"<b>Subject:</b> {e(NAME)}{to}</div>")
     return (f"<!doctype html><html><head><meta charset='utf-8'/><meta name='viewport' content='width=device-width,initial-scale=1'/>"
             f"<title>{e(x['subject'])}</title><style>{css}</style>{COPY_JS if preview else ''}</head>"
             f"<body style='margin:0;padding:24px 0;min-height:100vh;background:{DEEP};"
@@ -749,8 +769,8 @@ def draw_logo():
 
 
 def draw_header():
-    """The header background: the profile's own image (assets/header.png or .jpg), cropped to the header and tinted
-    with the brand colour so white text stays readable; otherwise a plain gradient in the profile's colours."""
+    """The header background: the profile's own image (assets/header.png or .jpg), cropped to the header and darkened
+    with a black overlay so white text stays readable; otherwise a gradient in the profile's colours."""
     plt = _plt()
     if not plt:
         return False
@@ -766,7 +786,7 @@ def draw_header():
         else:
             cut = int((h - w / 4) / 2); im = im[cut:h - cut]
         ax.imshow(im, extent=[0, 12.8, 0, 3.2], aspect="auto")
-        ax.add_patch(plt.Rectangle((0, 0), 12.8, 3.2, color=BRAND, alpha=.55, lw=0))
+        ax.add_patch(plt.Rectangle((0, 0), 12.8, 3.2, color="#000000", alpha=.5, lw=0))  # dark overlay keeps the white text readable
     else:
         import math
         ax.imshow([[i / 255 for i in range(256)]], extent=[0, 12.8, 0, 3.2], aspect="auto",
