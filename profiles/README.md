@@ -1,7 +1,7 @@
 # Profiles
 
-One folder per client, created by the setup conversation (`setup/SKILL.md`). When the client confirms their setup, the folder
-is committed, which locks their scope. The public repository ships with no clients.
+One folder per client, created by the setup conversation (`setup/SKILL.md`). Only setup writes a client's scope, with
+their confirmation. The public repository ships with no clients.
 
 ```
 profiles/<key>/

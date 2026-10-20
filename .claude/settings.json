@@ -10,8 +10,7 @@
     ],
     "ask": [
       "Edit(./profiles/*/user_scope.json)",
-      "Write(./profiles/*/user_scope.json)",
-      "Bash(git commit:*)"
+      "Write(./profiles/*/user_scope.json)"
     ]
   }
 }

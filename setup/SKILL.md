@@ -1,6 +1,6 @@
 ---
 name: feedback-brief-setup
-description: Sets up or changes a customer feedback brief in one short conversation - the user's connections (online service, internal warehouse or data store, file), time window, output format (chat, email or both) and schedule - writing the locked user scope and the profile, deploying a scheduled run on Google Cloud if wanted, then runs the first brief. Use at the start of a conversation when no user profile exists (including a plain "hi"), or to change a profile, a connection, the recipient, email or the schedule.
+description: Sets up or changes a customer feedback brief in one short conversation - the user's connections (online service, internal warehouse or data store, file), time window, output format (chat, email or both) and schedule - writing the user scope (with the user's confirmation) and the profile, deploying a scheduled run on Google Cloud if wanted, then runs the first brief. Use at the start of a conversation when no user profile exists (including a plain "hi"), or to change a profile, a connection, the recipient, email or the schedule.
 ---
 
 # Feedback Brief setup skill
@@ -48,8 +48,8 @@ The user names their tools; you work out the connection. Never offer write acces
    - **`user_scope.json`**, what the brief may reach, which only setup writes (see the next step). It is a separate file on purpose: a profile can change how the brief looks, never what it can reach.
 2. **If any connection is private** (a warehouse, a keyed service, a private file), ask one more question: *"Can the brief quote that feedback word for word? Yes is usual when the brief stays inside the company; no means themes are described and cited, but not quoted."* Set `privateQuotes` from the answer.
    Write `user_scope.json`: `{"timezone": "Australia/Sydney", "recipients": ["reader@company.com"], "sources": [...], "privateQuotes": false, "schedule": null}`, with each connection below in `sources`. Test each one by running `python3 engine/steps/collect.py <key>` and showing the user a few items from `items.json`; keep it only when they confirm.
-3. Set up email and the schedule if chosen (below), read back the connections, recipient and schedule, and ask the user to confirm. Then **lock** it: commit the profile (`git add profiles/<key> && git commit -m "Profile <key>: approved by the user"`) and ask the user to push it, or open a pull request, with their own access; the agent never pushes. The send gate compares the engine, the skill and the user scope with the shared repository and refuses to send if they differ, so a change only takes effect once a person with write access has accepted it. Without a shared repository, it checks against the local commit (run `git init` first if there is none).
-4. Run the first brief with [SKILL.md](../SKILL.md) and present it in the chosen format. **If `output` is `email` or `both`, the brief must also be emailed:** check the user has pushed the setup commit (if not, ask them to and wait), then run `python3 engine/steps/send.py <key>` and tell them it was sent, or show exactly why it was blocked and what fixes it. Never finish setup without either sending or explaining why not.
+3. Set up email and the schedule if chosen (below), read back the connections, recipient and schedule, and ask the user to confirm. Their confirmation is the approval: from then on every run checks the user scope against the use case scope and refuses anything outside it, and only setup changes it. No git step is needed. (A team that keeps profiles in a shared repository can commit the profile and review it there; the agent never pushes.)
+4. Run the first brief with [SKILL.md](../SKILL.md) and present it in the chosen format. **If `output` is `email` or `both`, the brief must also be emailed:** run `python3 engine/steps/send.py <key>` and tell them it was sent, or show exactly why it was blocked and what fixes it. Never finish setup without either sending or explaining why not.
 
 ## Connections
 You handle the connector: the user only says what they use. Each connection has a short `id` and a plain `label`, maps the provider's own field names onto the item shape (`date` and `text` required; `id`, `title`, `rating`, `url` optional), and sets `maxItems` to cover the window (each run reads the most recent 500 items across all connections). Test each one and show the user a sample before keeping it.
@@ -75,7 +75,7 @@ SMTP_PORT=587
 SMTP_USER=you@example.com
 SMTP_PASSWORD=app-password
 ```
-Common hosts: Gmail `smtp.gmail.com`, Outlook `smtp.office365.com`, iCloud `smtp.mail.me.com`. Save the recipient in `user_scope.json` → `recipients`. Send one test with `python3 engine/steps/send.py <key>` after the first brief, and only that way: never send email any other way. The send gate refuses until the user scope change is pushed, so tell the user to push the setup commit first (one line: `git push`). Changing the recipient later is a user scope change.
+Common hosts: Gmail `smtp.gmail.com`, Outlook `smtp.office365.com`, iCloud `smtp.mail.me.com`. Save the recipient in `user_scope.json` → `recipients`. Send one test with `python3 engine/steps/send.py <key>` after the first brief, and only that way: never send email any other way. Changing the recipient later is a user scope change.
 
 ## Schedule
 Record it in `user_scope.json` → `schedule`, for example `{"days": ["Mon"], "time": "08:00"}`. A scheduled run has nobody in the chat, so it always sends by email (the job runs `send.py` after the agent finishes), carries only `SKILL.md` (never this setup skill, so it has no instructions for changing its own reach), and can only write to `runs/`. Trigger it once by hand and check the result with the user before leaving it on. This path is designed but not yet proven end to end: tell the user so.
@@ -93,5 +93,5 @@ Record it in `user_scope.json` → `schedule`, for example `{"days": ["Mon"], "t
 
 ## Changing things later
 - Focus, tone, look, output format: edit `PROFILE.md` (its settings at the top, or the free text).
-- A connection, the recipient or the schedule: a user scope change; follow the sections above, confirm with the user, and commit it again.
+- A connection, the recipient or the schedule: a user scope change; follow the sections above, and confirm with the user.
 - A new kind of connection, write access, looser limits, posting replies: a change to the use case itself, not setup.

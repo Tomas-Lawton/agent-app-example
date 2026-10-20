@@ -55,7 +55,7 @@ Each run is four steps. The agent does the judgement; a script ends each step, d
 | Layer | Decides | Where | Changed by |
 |---|---|---|---|
 | **Use case** | **What happens:** the steps, the checks, the kinds of connection, the limits | [`SKILL.md`](SKILL.md), [`engine/`](engine/), [`engine/scope.json`](engine/scope.json) | The developer |
-| **User scope** | **What it reaches:** your connections, recipient, timezone and schedule | `profiles/<key>/user_scope.json` | Setup, with your confirmation, then locked |
+| **User scope** | **What it reaches:** your connections, recipient, timezone and schedule | `profiles/<key>/user_scope.json` | Setup only, with your confirmation |
 | **Profile** | **How it's shown:** who reads it, what matters, time window, look, output format | `profiles/<key>/PROFILE.md` | You, any time |
 
 The use case decides what happens; your user scope decides which data; your profile decides how it's shown. You can write anything in your profile and still can't give the agent a new connection, a new recipient or permission to post.
@@ -64,7 +64,7 @@ The use case decides what happens; your user scope decides which data; your prof
 
 The two are deliberately separate: one use case, many clients.
 
-- **[`SKILL.md`](SKILL.md) is the use case.** It is the same for everyone: the four steps, the rules, the file formats and when to run each script. It tells the agent *how to produce a feedback brief*. Only the developer changes it, and the send gate refuses to send if it differs from the shared repository.
+- **[`SKILL.md`](SKILL.md) is the use case.** It is the same for everyone: the four steps, the rules, the file formats and when to run each script. It tells the agent *how to produce a feedback brief*. Only the developer changes it; in Claude Code the agent is denied edits to it.
 - **`profiles/<key>/PROFILE.md` is the client.** It tells the agent *whose brief this is and what they care about*. A few settings sit at the top; everything below is plain text in the client's own words, which the agent follows when it reads, themes and writes:
 
   ```
@@ -83,7 +83,7 @@ The two are deliberately separate: one use case, many clients.
   ```
 
   Only these settings exist (`product`, `brief name`, `reader`, `time window`, `output`, `icon`, `colours`, `tickets`); any other is refused. So you can change anything about the brief by editing one markdown file, or by asking the agent to, and still can't widen its reach.
-- **`profiles/<key>/user_scope.json` is the client's reach,** kept apart on purpose: connections, recipient, timezone and schedule. It is structured so code can check it against the use case scope every run, and only setup writes it, with the user's confirmation, before it is locked.
+- **`profiles/<key>/user_scope.json` is the client's reach,** kept apart on purpose: connections, recipient, timezone and schedule. It is structured so code can check it against the use case scope every run, and only setup writes it, with the user's confirmation.
 
 The same split makes personalisation cheap. Ask *"use our new brand colours"* or *"focus on business customers this month"* and the agent edits the profile; the use case, and its checks, stay the same.
 
@@ -97,7 +97,7 @@ The scripts do the exact work and the checks; the agent does the judgement in be
 | [`steps/cluster.py`](engine/steps/cluster.py) | Groups similar items with K-means on word vectors, writes the reading parts the agent reads cluster by cluster, lays out the map, and carries over tags from the previous run |
 | [`steps/summarise.py`](engine/steps/summarise.py) | Checks every item is tagged and every quote is word for word, counts each theme exactly, and computes trends (first half against second half, and against the previous run) and scores |
 | [`steps/render.py`](engine/steps/render.py) | Checks the agent's plan and writing against the counts and citations, draws the map and header, and builds the chat brief, the preview, the email, the evidence list, the claims for the verifier and `metrics.json` |
-| [`steps/send.py`](engine/steps/send.py) | The send gate: reruns every check, refuses if the engine, skill or user scope differ from the shared repository, requires the verifier's verdicts on unattended runs, and emails only the approved recipient |
+| [`steps/send.py`](engine/steps/send.py) | The send gate: reruns every check, checks the user scope still fits the use case, requires the verifier's verdicts on unattended runs, and emails only the approved recipient |
 | [`core/config.py`](engine/core/config.py) | Reads the three layers (use case scope, user scope, `PROFILE.md`) and refuses a user scope or profile that goes beyond the use case |
 | [`core/checks.py`](engine/core/checks.py) | Every check on the agent's files: items, themes, tags, plan, content and citations, logged to `checks_log.jsonl` |
 | [`readers/service.py`](engine/readers/service.py) | Reads any online service or feed: approved hosts only, read only, keys from `.env`, respects robots.txt, and stops if access is refused |
@@ -126,9 +126,9 @@ Safety is designed into the use case, not left to the agent:
 - **Interpretation is labelled:** quotes and numbers are marked as checked by code; summaries and actions are marked as the agent's interpretation, with the number of items they cite.
 - **Independent verification:** an unattended run only sends once a separate verifier, given just each claim and its cited items, confirms every claim is supported.
 - **Exact parts are code:** the model reads and judges; code counts every item and computes every number.
-- **Fixed reach:** feedback is read only through `collect.py`, from the connections in your locked user scope, which can never go beyond the use case scope. If a site refuses access, the run records it and never tries another way round.
+- **Fixed reach:** feedback is read only through `collect.py`, from the connections in your user scope, which can never go beyond the use case scope. If a site refuses access, the run records it and never tries another way round.
 - **A send gate:** `send.py` reruns every check and emails only your approved recipient. Nothing in the project files tickets or posts anything.
-- **The rules can't be quietly changed:** setup commits your user scope once you confirm it, and you push it with your own access. The send gate refuses to send if the engine, the skill or your user scope differ from the shared repository, so a change only counts once someone with write access accepts it; the agent never pushes. In Claude Code, [`.claude/settings.json`](.claude/settings.json) also denies edits to the engine and asks you before any change to a user scope.
+- **Reach changes only through setup:** only setup writes your user scope, and only with your confirmation; every run checks it against the use case scope and refuses anything outside it. In Claude Code, [`.claude/settings.json`](.claude/settings.json) also denies edits to the engine and the skill, and asks you before any change to a user scope. The strongest lock is the scheduled run: a container built from the project, read only except for `runs/`, with no setup skill at all.
 - **Scheduled runs** carry only the run skill, never the setup skill, so an unattended agent has no instructions for changing its own reach. On Google Cloud it runs as its own least privilege service account, narrower than the person who set it up.
 
 Every run also writes `out/metrics.json`: items tagged, quotes verified, sentences cited, claims verified, how many problems the checks caught and the agent fixed, run time, and tokens when the harness reports them.
