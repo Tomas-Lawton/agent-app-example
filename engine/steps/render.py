@@ -9,7 +9,8 @@ coloured by the agent's theme) with matplotlib. Writes:
   out/brief.md       the brief as markdown, for the chat of any harness
   out/map.png        the feedback map (colour shows the theme, shape shows the connection)
   out/matrix.png     where to focus: each theme by reach (counted) and impact (the agent's score)
-  out/header.png     header artwork in the profile's colours (or the profile's own assets/header.png)
+  out/header.png     the header background: the profile's own assets/header image, tinted, or a gradient in its colours
+  out/logo.png       the profile's logo, if it has one (assets/logo.png or .jpg)
   out/preview.html   the full visual brief, with copy buttons and every item collected
   out/claims.json    every cited sentence with the text of its items, for the independent verifier
   out/metrics.json   grounding, coverage and guardrail numbers for this run
@@ -307,7 +308,7 @@ def when_text(s):
 
 def body(preview, img):
     t, ch = S["totals"], S.get("change") or {}
-    icon = PRODUCT.get("iconUrl")
+    icon = img("logo.png") or PRODUCT.get("iconUrl")  # optional: the profile's logo, else nothing
     icon_td = (f"<td width='64' valign='middle'><img src='{e(icon)}' width='52' height='52' alt='' "
                f"style='display:block;border-radius:12px;border:2px solid rgba(255,255,255,.6)'/></td>") if icon else ""
     rows = [
@@ -679,36 +680,64 @@ def draw_matrix():
     return True
 
 
-def draw_header():
-    """Header artwork in the profile's colours, unless the profile supplies its own (profiles/<key>/assets/header.png)."""
-    own = os.path.join(config.ROOT, "profiles", cfg["key"], "assets", "header.png")
-    if os.path.exists(own):
+def asset(name):
+    """The profile's own image, if it has one: profiles/<key>/assets/<name>.png or .jpg."""
+    for ext in ("png", "jpg", "jpeg"):
+        p = os.path.join(config.ROOT, "profiles", cfg["key"], "assets", f"{name}.{ext}")
+        if os.path.exists(p):
+            return p
+    return None
+
+
+def draw_logo():
+    """The profile's logo (assets/logo.png or .jpg), embedded in the brief so email clients show it without fetching."""
+    own = asset("logo")
+    if not own:
+        return False
+    if own.endswith(".png"):
         import shutil
-        shutil.copy(own, "out/header.png")
+        shutil.copy(own, "out/logo.png")
         return True
     plt = _plt()
     if not plt:
         return False
-    import math, random
+    plt.imsave("out/logo.png", plt.imread(own))
+    return True
+
+
+def draw_header():
+    """The header background: the profile's own image (assets/header.png or .jpg), cropped to the header and tinted
+    with the brand colour so white text stays readable; otherwise a plain gradient in the profile's colours."""
+    plt = _plt()
+    if not plt:
+        return False
     from matplotlib.colors import LinearSegmentedColormap
-    rnd = random.Random(cfg["key"])
     fig = plt.figure(figsize=(12.8, 3.2), dpi=100)
     ax = fig.add_axes([0, 0, 1, 1]); ax.set_xlim(0, 12.8); ax.set_ylim(0, 3.2); ax.axis("off")
-    grad = [[i / 255 for i in range(256)]]
-    ax.imshow(grad, extent=[0, 12.8, 0, 3.2], aspect="auto", cmap=LinearSegmentedColormap.from_list("b", [BRAND, BRAND2]))
-    for k in range(5):  # soft waves
-        ys = [1.2 + .35 * k + .45 * math.sin(xv / 1.7 + k * 1.3) for xv in [i / 10 for i in range(129)]]
-        ax.fill_between([i / 10 for i in range(129)], ys, 3.2 if k % 2 else 0, color="white", alpha=.035 + .01 * k, lw=0)
-    for _ in range(14):  # light circles
-        ax.add_patch(plt.Circle((rnd.uniform(6, 12.8), rnd.uniform(0, 3.2)), rnd.uniform(.2, 1.1), color=ACCENT if rnd.random() < .25 else "white",
-                                alpha=rnd.uniform(.05, .14), lw=0))
+    own = asset("header")
+    if own:
+        im = plt.imread(own)
+        h, w = im.shape[:2]
+        if w / h > 4:  # crop the middle to the header's 4:1 shape
+            cut = int((w - 4 * h) / 2); im = im[:, cut:w - cut]
+        else:
+            cut = int((h - w / 4) / 2); im = im[cut:h - cut]
+        ax.imshow(im, extent=[0, 12.8, 0, 3.2], aspect="auto")
+        ax.add_patch(plt.Rectangle((0, 0), 12.8, 3.2, color=BRAND, alpha=.55, lw=0))
+    else:
+        import math
+        ax.imshow([[i / 255 for i in range(256)]], extent=[0, 12.8, 0, 3.2], aspect="auto",
+                  cmap=LinearSegmentedColormap.from_list("b", [BRAND, BRAND2]))
+        for k in range(5):  # soft waves
+            ys = [1.2 + .35 * k + .45 * math.sin(xv / 1.7 + k * 1.3) for xv in [i / 10 for i in range(129)]]
+            ax.fill_between([i / 10 for i in range(129)], ys, 3.2 if k % 2 else 0, color="white", alpha=.035 + .01 * k, lw=0)
     fig.savefig("out/header.png")
     plt.close(fig)
     return True
 
 
 os.makedirs("out", exist_ok=True)
-made = {"map.png": draw_map(), "matrix.png": draw_matrix(), "header.png": draw_header()}
+made = {"map.png": draw_map(), "matrix.png": draw_matrix(), "header.png": draw_header(), "logo.png": draw_logo()}
 cids = {name: make_msgid(domain="brief.local")[1:-1] for name, ok in made.items() if ok}
 uri = lambda name: ("data:image/png;base64," + base64.b64encode(open(f"out/{name}", "rb").read()).decode()) if name in cids else ""
 html_preview = page(uri, preview=True)  # first render numbers the citations

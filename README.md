@@ -29,6 +29,7 @@ You get it **in the chat**, **by email**, or both, over the time window you choo
    - **Connections:** what you use for feedback (Zendesk, Intercom, GitHub Issues, BigQuery, an export file…). The agent sets up each connection itself, shows you a sample, and keeps it only when you confirm
    - **Time window:** how much feedback each brief covers (default the last 7 days)
    - **Output format:** in the chat and by email by default (or just one). For email, it walks you through a sending address and an app password
+   - **Look (optional):** the brief's name and colours, plus your logo and a header background image if you have them
    - **Schedule:** on request, or for example "every Monday at 8am". On Google Cloud, the agent deploys the scheduled run itself
 4. **The agent runs your first brief** and presents it. Then keep asking: *"why is the top theme growing?"*, *"show me every scam report"* (answered from the evidence, with citations), or *"run this week's brief"*, *"make it shorter"*, *"add our survey export"*.
 
