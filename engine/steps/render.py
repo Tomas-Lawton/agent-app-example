@@ -131,15 +131,36 @@ def source_label(sid):
     return f"<a href='{e(c['link'])}' style='color:{BRAND}'>{label}</a>" if c.get("link") else label
 
 
-def card(inner, accent=None):
+def box(inner, accent=None):
     edge = f"border-left:4px solid {accent};" if accent else ""
-    return (f"<tr><td style='padding:8px 24px'><div style='background:#ffffff;border:1px solid {LINE};{edge}border-radius:12px;"
-            f"padding:16px 18px;box-shadow:0 1px 2px rgba(16,24,40,.05)'>{inner}</div></td></tr>")
+    return (f"<div style='background:#ffffff;border:1px solid {LINE};{edge}border-radius:12px;"
+            f"padding:16px 18px;box-shadow:0 1px 2px rgba(16,24,40,.05)'>{inner}</div>")
+
+
+def full(b):
+    return f"<tr><td style='padding:8px 24px'>{b}</td></tr>"
+
+
+def card(inner, accent=None):
+    return full(box(inner, accent))
+
+
+def grid(boxes):
+    """Two boxes side by side (they stack on a phone); an odd last box takes the full width."""
+    rows = []
+    for k in range(0, len(boxes) - 1, 2):
+        rows.append(f"<tr><td style='padding:8px 24px'><table role='presentation' width='100%' cellpadding='0' cellspacing='0'><tr>"
+                    f"<td class='col' width='50%' valign='top' style='padding-right:8px'>{boxes[k]}</td>"
+                    f"<td class='col' width='50%' valign='top' style='padding-left:8px'>{boxes[k + 1]}</td></tr></table></td></tr>")
+    if len(boxes) % 2:
+        rows.append(full(boxes[-1]))
+    return "".join(rows)
 
 
 def section(title, sub=""):
-    sub = f"<div style='{F}font-size:13px;color:{MUTED};margin-top:2px'>{sub}</div>" if sub else ""
-    return (f"<tr><td style='padding:26px 24px 4px'><div style='{F}font-size:18px;font-weight:700;color:{INK}'>{e(title)}</div>{sub}</td></tr>")
+    sub = f"<div style='{F}font-size:13px;color:{MUTED};margin-top:4px'>{sub}</div>" if sub else ""
+    return (f"<tr><td style='padding:30px 24px 6px'><div style='{F}font-size:22px;font-weight:800;color:{BRAND};letter-spacing:-.2px'>{e(title)}</div>"
+            f"<div style='width:40px;height:3px;background:{ACCENT};border-radius:2px;margin-top:6px'></div>{sub}</td></tr>")
 
 
 def stat(label, value, sub=""):
@@ -263,7 +284,7 @@ def themes_chart():
         f"background:{KIND.get(t['kind'], BRAND)}'></div></td>"
         f"<td width='36' align='right' style='{F}font-size:12px;color:{MUTED}'>{t['count']}</td></tr>" for t in ts)
     legend = " ".join(f"<span style='color:{c}'>&#9632; {k}</span>" for k, c in KIND.items())
-    return (f"<div style='{F}font-size:13px;font-weight:600;color:{INK};margin:20px 0 8px'>Items per theme</div>"
+    return (f"<div style='{F}font-size:13px;font-weight:600;color:{INK};margin:0 0 8px'>Items per theme</div>"
             f"<table role='presentation' width='100%' cellpadding='0' cellspacing='0'>{rows}</table>"
             f"<div style='{F}font-size:12px;color:{MUTED};margin-top:6px'>{legend}</div>"
             f"<div style='{F}font-size:12px;line-height:1.5;color:{MUTED};margin-top:4px'>The agent gives each theme a kind after reading "
@@ -283,7 +304,7 @@ def ratings_chart():
         f"background:{'#b91c1c' if t['avgRating'] < overall else '#15803d'}'></div></td>"
         f"<td width='36' align='right' style='{F}font-size:12px;color:{MUTED}'>{t['avgRating']}</td></tr>"
         for t in sorted(ts, key=lambda t: t["avgRating"]))
-    return (f"<div style='{F}font-size:13px;font-weight:600;color:{INK};margin:20px 0 8px'>Rating by theme "
+    return (f"<div style='{F}font-size:13px;font-weight:600;color:{INK};margin:0 0 8px'>Rating by theme "
             f"<span style='font-weight:400;color:{MUTED}'>(out of 5; overall {overall}. Red is below the overall average)</span></div>"
             f"<table role='presentation' width='100%' cellpadding='0' cellspacing='0'>{rows}</table>")
 
@@ -356,7 +377,9 @@ def body(preview, img):
         rows.append(card(f"<img src='{img('map.png')}' width='544' alt='Every item placed by similarity, coloured by theme' style='width:100%;height:auto;display:block'/>"
                          f"<div style='{F}font-size:12px;color:{MUTED};margin-top:6px'>Grouped with K-means on word vectors. Grey dots fit no theme.</div>"))
     rows.append(section("At a glance"))
-    rows.append(card(volume_chart() + themes_chart() + ratings_chart()))
+    rows.append(grid([box(volume_chart()), box(themes_chart())]))
+    if ratings_chart():
+        rows.append(card(ratings_chart()))
     if img("matrix.png"):
         rows.append(section("Where to focus", "Each theme by how many customers it reaches and how much it hurts them"))
         rows.append(card(f"<img src='{img('matrix.png')}' width='544' alt='Themes by reach and impact' style='width:100%;height:auto;display:block'/>"
@@ -375,7 +398,7 @@ def body(preview, img):
         size = f"{s['count']} items &middot; {s['share']}% of all feedback &middot; {s['firstHalf']} then {s['secondHalf']} across the period"
         prev = f" &middot; {s['previousShare']}% last run" if s.get("previousShare") is not None else ""
         srcs = "".join(f"{source_tag(k)}<span style='margin-right:8px'>{v}</span>" for k, v in (s.get("sources") or {}).items())
-        return card(
+        return box(
             f"<a name='{e(th['id'])}' id='{e(th['id'])}'></a><div>{pill(s['kind'], KIND.get(s['kind'], BRAND), solid=True)}{trend}</div>"
             f"<div style='{F}font-size:17px;font-weight:700;color:{INK};margin-top:4px'>{e(th['title'])}</div>"
             f"<div style='{F}font-size:12px;color:{MUTED};margin-top:3px'>{size}{prev}{rating}</div>"
@@ -390,24 +413,26 @@ def body(preview, img):
     working = [th for th in x["themes"] if themes_by_id[th["id"]]["kind"] == "praise"]
     if issues:
         rows.append(section("What customers are saying", "Every quote is word for word, with its source"))
-        rows += [theme_card(th) for th in issues]
+        rows += [full(theme_card(th)) for th in issues]
     if working:
         rows.append(section("What's working", "What customers praise: worth passing on to the teams behind it"))
-        rows += [theme_card(th) for th in working]
+        rows.append(grid([theme_card(th) for th in working]))
 
     if x.get("watch"):
         watch_by_id = {w["id"]: w for w in S.get("watch", [])}
         rows.append(section("Watchlist", "Rare but serious: only a few items, but worth knowing about"))
+        boxes = []
         for w in x["watch"]:
             s = watch_by_id.get(w["id"], {})
             srcs = "".join(f"{source_tag(k)}<span style='margin-right:8px'>{v}</span>" for k, v in (s.get("sources") or {}).items())
-            rows.append(card(
+            boxes.append(box(
                 f"<div style='{F}font-size:16px;font-weight:700;color:{INK}'>{e(w['title'])}</div>"
                 f"<div style='{F}font-size:12px;color:{MUTED};margin-top:3px'>{s.get('count', 0)} item{'s' if s.get('count') != 1 else ''} &middot; From {srcs}</div>"
                 f"<div style='{F}font-size:14px;line-height:1.55;color:{INK};margin-top:8px'>{cite(w['why'])}</div>"
                 + label("interpretation", f"watch {w['id']}", len(set(checks.citations(w['why']))))
                 + "".join(quote(q) for q in w.get("quotes") or []),
                 accent="#b91c1c"))
+        rows.append(grid(boxes))
 
     if x.get("actions"):
         rows.append(section("Things to act on", "Ranked by impact, reach and growth, each with a draft ticket for the owning team"))
@@ -507,7 +532,7 @@ def mix(a, b, w):
 def page(img, preview=False):
     DEEP = mix(BRAND, "#000000", .35)  # the primary colour, a bit darker
     css = ("@media (max-width:620px){.wrap{width:100%!important}.stat{display:block!important;width:100%!important;"
-           "border-bottom:1px solid " + LINE + "}}")
+           "border-bottom:1px solid " + LINE + "}.col{display:block!important;width:100%!important;padding:0 0 12px 0!important}}")
     strip = ""
     if preview:
         strip = (f"<div style='{F}width:92%;max-width:1100px;margin:0 auto 12px;font-size:12px;color:#ffffff'>"
