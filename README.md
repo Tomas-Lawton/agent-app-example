@@ -17,8 +17,9 @@ There is no app to deploy. The harness runs the agent; this project provides the
 
 ## How to use it
 
-1. **Download the project** and open the folder in your agent harness.
-2. **Say "Use the setup skill".** The agent asks a few questions, one at a time: about you, where your feedback lives (Zendesk, BigQuery, an export file…), the time window, email details, the look, and an optional schedule. It sets up each connection itself and shows you a sample before keeping it.
+1. **Ask your agent to clone the project and start setup.** In any agent harness, say:
+   > Clone https://github.com/Tomas-Lawton/agent-app-example, open it, and use the [setup skill](setup/SKILL.md).
+2. **Answer the setup questions**, one at a time: about you, where your feedback lives (Zendesk, BigQuery, an export file…), the time window, email details, the look, and an optional schedule. The agent sets up each connection itself and shows you a sample before keeping it.
 3. **The agent runs your first brief** and sends it. Then keep asking: *"why is the top theme growing?"*, *"make it shorter"*, *"add our survey export"*, *"run this week's brief"*.
 
 **Requirements:** an agent harness and Python 3.9 or newer. The agent installs the rest (`requirements.txt`) in the project's own `.venv`. Optional: Google Cloud for BigQuery or scheduled runs.
