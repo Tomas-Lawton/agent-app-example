@@ -39,6 +39,7 @@ Run every command from the repository root. When you need anything the scripts d
 - Up to three actions, on themes scoring 6 or more, most important first, owned by roles. Praise is never an action. If nothing material changed, set `quietWeek: true` and say so.
 - Each action has a **draft ticket** for the owning team: a clear title, and a body with what's happening, the evidence (counts from `summary.json`, a short quote), and what to check first. Never file it.
 - **Watchlist:** list every watched theme in the plan's `watch`, and for each write a title, one or two cited sentences on why it matters (`why`), and one or two of its quotes.
+- **Questions:** write 2 or 3 follow-up questions this brief raises that the reader could ask you, specific to what you found ("Did the lockouts start right after the 4.2 release?", not "Tell me more"). The brief shows them under "Ask your agent".
 - **Quotes:** show three per theme (fewer only if the theme has fewer checked quotes). The theme summary cites the quoted items along with the others it rests on.
 - **Cite as you write.** End every sentence in a theme summary, action detail and ticket body with the items it rests on, like `[tickets-012, survey-087]`, using items tagged with that theme. Code checks every sentence has citations and every cited item exists and belongs; the brief links each citation to the item.
 - Copy `dateLabel` and `windowLabel` from `run.json`; start `subject` with the brief's name; quotes come from the theme's `evidence`; numbers only from `summary.json`. No links in prose (render adds sources, links and citations).
@@ -54,6 +55,7 @@ Run every command from the repository root. When you need anything the scripts d
    "ticket": {"title": "False declines on everyday card purchases since Thursday", "body": "What is happening [tickets-012, survey-087]. What to check first [tickets-031]."}}],
  "themes": [{"id": "cards-declined", "title": "...", "summary": "Each sentence ends with its citations [tickets-012, tickets-019].", "quotes": [{"item": "tickets-012", "text": "..."}]}],
  "watch": [{"id": "scam-calls", "title": "...", "why": "Why it matters, cited [tickets-044].", "quotes": [{"item": "tickets-044", "text": "..."}]}],
+ "questions": ["A specific follow-up question this brief raises?", "Another?"],
  "footer": "Anything the reader should know about the evidence: a blocked connection, a partly covered window."}
 ```
 

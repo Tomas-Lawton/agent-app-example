@@ -8,6 +8,7 @@ and wording. Every theme and quote shows its source. Draws the feedback map (eve
 coloured by the agent's theme) with matplotlib. Writes:
   out/brief.md       the brief as markdown, for the chat of any harness
   out/map.png        the feedback map (colour shows the theme, shape shows the connection)
+  out/matrix.png     where to focus: each theme by reach (counted) and impact (the agent's score)
   out/header.png     header artwork in the profile's colours (or the profile's own assets/header.png)
   out/preview.html   the full visual brief, with copy buttons and every item collected
   out/claims.json    every cited sentence with the text of its items, for the independent verifier
@@ -44,6 +45,8 @@ PRODUCT = cfg.get("product", {})
 F = "font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Arial,Helvetica,sans-serif;"  # no quotes: styles sit in single quoted attributes
 e = lambda s: html.escape(str(s if s is not None else ""))
 themes_by_id = {t["id"]: t for t in S["themes"]}
+PALETTE = [BRAND, ACCENT, "#c2410c", "#7c3aed", "#15803d", "#0891b2", "#be185d", "#4d7c0f"]
+THEME_COLOUR = {th["id"]: PALETTE[n % len(PALETTE)] for n, th in enumerate(x["themes"])}  # the same colour and number on every chart
 kept_themes = {t["id"]: t for t in json.load(open("themes.json"))["themes"] if t.get("decision") == "keep"}
 CITED = []  # item ids in order of first citation, numbered [1], [2] ... across the brief
 
@@ -223,6 +226,23 @@ def themes_chart():
             f"<b>praise</b>, something working well; <b>question</b>, customers unsure how something works.</div>")
 
 
+def ratings_chart():
+    """Average rating per theme against the overall average: which themes drag the rating down."""
+    overall = S["totals"].get("avgRating")
+    ts = [t for t in S["themes"] if t.get("avgRating") is not None]
+    if overall is None or not ts:
+        return ""
+    rows = "".join(
+        f"<tr><td width='40%' style='{F}font-size:12px;color:{INK};padding:4px 8px 4px 0'>{e(t['title'])}</td>"
+        f"<td style='padding:4px 0'><div style='width:{max(3, round(100 * t['avgRating'] / 5))}%;height:14px;border-radius:7px;"
+        f"background:{'#b91c1c' if t['avgRating'] < overall else '#15803d'}'></div></td>"
+        f"<td width='36' align='right' style='{F}font-size:12px;color:{MUTED}'>{t['avgRating']}</td></tr>"
+        for t in sorted(ts, key=lambda t: t["avgRating"]))
+    return (f"<div style='{F}font-size:13px;font-weight:600;color:{INK};margin:20px 0 8px'>Rating by theme "
+            f"<span style='font-weight:400;color:{MUTED}'>(out of 5; overall {overall}. Red is below the overall average)</span></div>"
+            f"<table role='presentation' width='100%' cellpadding='0' cellspacing='0'>{rows}</table>")
+
+
 def body(preview, img):
     t, ch = S["totals"], S.get("change") or {}
     icon = PRODUCT.get("iconUrl")
@@ -264,7 +284,12 @@ def body(preview, img):
         rows.append(card(f"<img src='{img('map.png')}' width='544' alt='Every item placed by similarity, coloured by theme' style='width:100%;height:auto;display:block'/>"
                          f"<div style='{F}font-size:12px;color:{MUTED};margin-top:6px'>Grouped with K-means on word vectors. Grey dots fit no theme.</div>"))
     rows.append(section("At a glance"))
-    rows.append(card(volume_chart() + themes_chart()))
+    rows.append(card(volume_chart() + themes_chart() + ratings_chart()))
+    if img("matrix.png"):
+        rows.append(section("Where to focus", "Each theme by how many customers it reaches and how much it hurts them"))
+        rows.append(card(f"<img src='{img('matrix.png')}' width='544' alt='Themes by reach and impact' style='width:100%;height:auto;display:block'/>"
+                         f"<div style='{F}font-size:12px;color:{MUTED};margin-top:6px'>Reach is counted by code; impact is the agent's judgement "
+                         f"(0 to 3, with ease of acting nudging it up). Top right is where to act first.</div>"))
 
     rows.append(section("What customers are saying", "Every quote is word for word, with its source"))
     for th in x["themes"]:
@@ -313,12 +338,16 @@ def body(preview, img):
                 + f"</td></tr></table>"))
 
 
+    qs = "".join(f"<li style='margin:2px 0'>&ldquo;{e(q)}&rdquo;</li>" for q in x.get("questions") or [])
+    how = ("Ask the agent directly, in the conversation where this brief was made. It answers from this brief's evidence, "
+           "with every claim cited. For example:" if preview else
+           "Follow-up questions can't be answered by email yet. Open the project in your agent harness and ask there, "
+           "for example:")
     rows.append(section("Ask your agent"))
-    rows.append(card(f"<div style='{F}font-size:14px;line-height:1.7;color:{INK}'>"
-                     "Reply in your agent to go further, for example:<br/>"
-                     "&ldquo;File ticket 1 in Jira&rdquo; &middot; &ldquo;Why is the top theme growing?&rdquo; &middot; "
-                     "&ldquo;Show me everything about it&rdquo; &middot; &ldquo;Make the brief shorter&rdquo; &middot; "
-                     "&ldquo;Add a connection&rdquo;</div>"))
+    rows.append(card(f"<div style='{F}font-size:14px;line-height:1.6;color:{INK}'>{how}"
+                     f"<ul style='margin:6px 0 0 18px;padding:0'>{qs}</ul>"
+                     f"<div style='{F}font-size:12px;color:{MUTED};margin-top:8px'>You can also ask it to change the brief "
+                     f"(&ldquo;make it shorter&rdquo;) or add a connection.</div></div>"))
 
     srcs = []
     for c in S.get("connections", []):
@@ -412,6 +441,9 @@ def text():
     for a in x.get("actions") or []:
         tk = a.get("ticket") or {}
         out += ["", f"Draft ticket: {tk.get('title', '')}", tk.get("body", "")]
+    if x.get("questions"):
+        out += ["", "Follow-up questions can't be answered by email yet; open the project in your agent harness and ask there, for example:"]
+        out += [f"  - {q}" for q in x["questions"]]
     out += ["", x["footer"]]
     return "\n".join(out)
 
@@ -432,6 +464,8 @@ def markdown():
         out += [f"*The numbers count all {cv['collected']} items in the window. Themes come from the newest {cv['analysed']}, from {cv['from']} to {cv['until']}.*", ""]
     if os.path.exists("out/map.png"):
         out += ["![Feedback map](map.png)", ""]
+    if os.path.exists("out/matrix.png"):
+        out += ["![Where to focus: themes by reach and impact](matrix.png)", ""]
     out += ["## What customers are saying", ""]
     for th in x["themes"]:
         s = themes_by_id[th["id"]]
@@ -461,6 +495,9 @@ def markdown():
             src = f"[{it.get('sourceLabel', '')}]({it['url']})" if it.get("url") else it.get("sourceLabel", "")
             out.append(f"{n}. `{i}` · {src} · {it.get('date', '')}: {it.get('text', '')[:200]}")
         out.append("")
+    if x.get("questions"):
+        out += ["## Ask me", "", "Ask me directly here; I answer from this brief's evidence, with every claim cited. For example:", ""]
+        out += [f"- {q}" for q in x["questions"]] + [""]
     out += ["---", x["footer"], "", "*Summaries and actions are the agent's interpretation, with the items they cite; quotes and numbers are checked by code.*"]
     return "\n".join(out)
 
@@ -488,8 +525,7 @@ def draw_map():
         if os.path.exists(p):
             tags.update(json.load(open(p)))
     shown = [th["id"] for th in x["themes"]]
-    palette = [BRAND, ACCENT, "#c2410c", "#7c3aed", "#15803d", "#0891b2", "#be185d", "#4d7c0f"]
-    colour = {tid: palette[n % len(palette)] for n, tid in enumerate(shown)}
+    colour = THEME_COLOUR
     fig, ax = plt.subplots(figsize=(8, 5.6), dpi=160)
     fig.patch.set_facecolor("white"); ax.set_facecolor(TINT)
     for iid, (px, py) in pos.items():
@@ -515,6 +551,42 @@ def draw_map():
         side.set_visible(False)
     fig.tight_layout()
     fig.savefig("out/map.png", facecolor="white", bbox_inches="tight")
+    plt.close(fig)
+    return True
+
+
+def draw_matrix():
+    """Priority matrix: each theme by reach (share of feedback, counted by code) and impact (the agent's score)."""
+    plt = _plt()
+    ts = [themes_by_id[th["id"]] for th in x["themes"] if themes_by_id[th["id"]].get("impact") is not None]
+    if not plt or len(ts) < 2:
+        return False
+    fig, ax = plt.subplots(figsize=(8, 4.6), dpi=160)
+    fig.patch.set_facecolor("white"); ax.set_facecolor("white")
+    top = max(t["share"] for t in ts)
+    xmid = top / 2
+    ax.axvline(xmid, color=LINE, lw=1, zorder=1); ax.axhline(1.75, color=LINE, lw=1, zorder=1)
+    ax.fill_between([xmid, top * 1.15], 1.75, 3.9, color=TINT, zorder=0)
+    ax.text(top * 1.12, 3.8, "act first", ha="right", va="top", fontsize=8, color=MUTED, style="italic")
+    keys = []
+    for n, th in enumerate(x["themes"], 1):
+        t = themes_by_id[th["id"]]
+        if t.get("impact") is None:
+            continue
+        y = t["impact"] + 0.25 * (t.get("actionability") or 0)  # ease of acting nudges a theme up within its impact band
+        ax.scatter(t["share"], y, s=120 + 18 * t["count"] ** .8, color=THEME_COLOUR[th["id"]], alpha=.85, edgecolors="white", lw=1.2, zorder=3)
+        ax.annotate(str(n), (t["share"], y), fontsize=8, fontweight="bold", color="white", ha="center", va="center", zorder=4)
+        keys.append(plt.Line2D([], [], marker="o", color=THEME_COLOUR[th["id"]], linestyle="", markersize=7, label=f"{n}. {th['title'][:60]}"))
+    ax.set_xlim(0, top * 1.15); ax.set_ylim(-0.3, 3.9)
+    ax.set_xlabel("Reach: share of all feedback (%)", fontsize=8, color=MUTED)
+    ax.set_ylabel("Impact (agent's judgement)", fontsize=8, color=MUTED)
+    ax.set_yticks([0, 1, 2, 3]); ax.set_yticklabels(["none", "minor", "major", "blocking"], fontsize=7.5, color=MUTED)
+    ax.tick_params(axis="x", labelsize=7.5, colors=MUTED)
+    for side in ("top", "right"):
+        ax.spines[side].set_visible(False)
+    ax.legend(handles=keys, loc="upper center", bbox_to_anchor=(.5, -.14), ncol=2, frameon=False, fontsize=7.5, handletextpad=.3, columnspacing=1.2)
+    fig.tight_layout()
+    fig.savefig("out/matrix.png", facecolor="white", bbox_inches="tight")
     plt.close(fig)
     return True
 
@@ -548,7 +620,7 @@ def draw_header():
 
 
 os.makedirs("out", exist_ok=True)
-made = {"map.png": draw_map(), "header.png": draw_header()}
+made = {"map.png": draw_map(), "matrix.png": draw_matrix(), "header.png": draw_header()}
 cids = {name: make_msgid(domain="brief.local")[1:-1] for name, ok in made.items() if ok}
 uri = lambda name: ("data:image/png;base64," + base64.b64encode(open(f"out/{name}", "rb").read()).decode()) if name in cids else ""
 html_preview = page(uri, preview=True)  # first render numbers the citations

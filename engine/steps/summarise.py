@@ -115,7 +115,8 @@ summary = {
     "coverage": {"from": covered.isoformat(), "until": info["until"], "analysed": len(items), "collected": len(window)},
     "untaggedShare": round(100 * untagged / N), "previous": prev_sum["date"] if prev_sum else None, "change": change, "daily": daily,
     "themes": [{"id": t["id"], "title": t["title"], "kind": t.get("kind"),
-                **{k: t["computed"][k] for k in ("count", "share", "avgRating", "lowShare", "trend", "firstHalf", "secondHalf", "previousShare", "score", "sources")}}
+                **{k: t["computed"][k] for k in ("count", "share", "avgRating", "lowShare", "trend", "firstHalf", "secondHalf", "previousShare", "score", "sources")},
+                "impact": (t.get("scores") or {}).get("impact"), "actionability": (t.get("scores") or {}).get("actionability")}
                for t in kept],
     "watch": [{"id": t["id"], "title": t["title"], "kind": t.get("kind"), **{k: t["computed"][k] for k in ("count", "share", "trend", "sources")}}
               for t in data["themes"] if t.get("decision") == "watch"],

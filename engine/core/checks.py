@@ -131,6 +131,11 @@ def content(cfg, info):
     if m.get("dateLabel") != info["dateLabel"] or m.get("windowLabel") != info["windowLabel"]:
         err.append(f"`meta` must copy dateLabel \"{info['dateLabel']}\" and windowLabel \"{info['windowLabel']}\" from run.json")
     for f in ("subject", "preheader", "headline", "footer"): _text(err, f, x.get(f))
+    qs = x.get("questions") or []
+    if not 2 <= len(qs) <= 3: err.append("`questions` needs 2 or 3 follow-up questions the reader could ask about this brief")
+    for k, q in enumerate(qs):
+        _text(err, f"questions[{k}]", q)
+        if isinstance(q, str) and not q.strip().endswith("?"): err.append(f"`questions[{k}]` should be a question")
     if [a.get("theme") for a in x.get("actions") or []] != [a.get("theme") for a in p.get("actions") or []]: err.append("`actions` must follow the plan")
     if [t.get("id") for t in x.get("themes") or []] != p.get("themes"): err.append("`themes` must be the plan's themes, in order")
     watched = _kept("watch")
