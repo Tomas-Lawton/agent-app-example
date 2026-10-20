@@ -21,4 +21,4 @@ Only explain how the project works if the user asks.
 | Their own brief, or to change a profile, a connection, the recipient or a schedule | [setup/SKILL.md](setup/SKILL.md). When setup finishes, run their first brief with [SKILL.md](SKILL.md) straight away and open the preview |
 | To understand how it works or why it's safe | [README.md](README.md) |
 
-Read the skill's hard rules before acting. Install anything missing yourself (python3, and `requirements.txt`), ask only for what you can't know, and confirm before changing any access.
+Read the skill's hard rules before acting. Install anything missing yourself, inside the project's own `.venv` and never system-wide (setup explains), ask only for what you can't know, and confirm before changing any access.

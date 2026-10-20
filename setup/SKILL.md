@@ -7,9 +7,16 @@ description: Sets up or changes a customer feedback brief in one short conversat
 
 Setup decides **what the agent does** (connections, recipient, schedule: the user scope, `profiles/<key>/user_scope.json`) and **how the brief is presented** (focus, look, output format: the profile, `profiles/<key>/PROFILE.md`). It is the only time the user scope changes, and every change needs the user's confirmation. The user scope can only narrow the use case scope (`engine/scope.json`); `collect.py` refuses anything outside it.
 
-The user is not technical. Never ask them to run commands or edit files; install what's missing yourself (python3, then `python3 -m pip install -r requirements.txt` for the clustering and map); ask only for what you can't know.
+The user is not technical. Never ask them to run commands or edit files; install what's missing yourself (see **Work in the sandbox** below); ask only for what you can't know.
 
 **Ask every question below, one per message, in order.** After each answer, ask the next question in your very next message; don't start building the profile until all six have been answered. Never skip a question because it has a default: ask it and offer the default, so the user can just say "yes". Only skip a question the user has already answered explicitly. Keep each message to a line or two, and don't repeat back everything after each answer. When all six are answered, summarise once and ask the user to confirm before you save anything.
+
+## Work in the sandbox
+Keep everything inside the project folder and your harness's sandbox, so nothing on the user's machine changes and nothing clashes with what is already installed:
+- **One virtual environment, in the project:** `python3 -m venv .venv && .venv/bin/pip install -r requirements.txt`, then run every script with `.venv/bin/python3` (on Windows `.venv\Scripts\python`). Never install packages system-wide, never use `sudo`, and don't change the user's global Python, shell profile or settings.
+- **Files stay in the project:** profiles in `profiles/`, secrets in `.env`, runs in `runs/`, throwaway code in the run folder. Nothing goes in the user's home folder or anywhere else.
+- **Keep the harness's sandbox on.** If it blocks something the brief needs (usually network access to an approved connection), tell the user what and why, and let them allow it; never switch the sandbox off or find a way round it.
+- Only Google Cloud sign-in (`gcloud`), for a warehouse connection or a scheduled run, lives outside the project; ask before using it.
 
 ## The questions, one at a time
 1. **About you:** the product or company, and who reads the brief. Then, if not already clear, their city (for the timezone) and what matters most, as a short follow up.

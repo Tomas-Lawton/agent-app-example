@@ -12,7 +12,7 @@ description: Runs a customer feedback brief for a profile in profiles/<key>/ - w
 ## Before the first run
 Check the tools once per machine, and install anything missing yourself:
 - **Python 3.9 or newer:** `python3 --version`.
-- **The packages in `requirements.txt`** (scikit-learn and matplotlib, for clustering and the map): `python3 -c "import sklearn, matplotlib"`. If that fails, run `python3 -m pip install -r requirements.txt`. If pip refuses because the system Python is managed, make a virtual environment in the project root, `python3 -m venv .venv && .venv/bin/pip install -r requirements.txt`, and use `.venv/bin/python3` instead of `python3` in every command below.
+- **The packages in `requirements.txt`** (scikit-learn and matplotlib, for clustering and the map), in the project's own virtual environment: if `.venv/` doesn't exist, run `python3 -m venv .venv && .venv/bin/pip install -r requirements.txt`. Use `.venv/bin/python3` instead of `python3` in every command below. Never install system-wide or with `sudo`, and keep the harness's sandbox on; if it blocks something the brief needs, tell the user rather than working round it.
 - Everything else is the Python standard library. A warehouse connection also needs Google credentials, which setup arranges.
 
 ## Steps
