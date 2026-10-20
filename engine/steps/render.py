@@ -167,6 +167,15 @@ def grid(boxes):
     return "".join(rows)
 
 
+def split(left, right):
+    """Two cards stacked on the left, one card on the right that stretches to the full height (stacks on a phone)."""
+    stack = "".join(f"<div style='{box_style(b['accent'])};margin-top:{16 if n else 0}px'>{b['inner']}</div>" for n, b in enumerate(left))
+    return (f"<tr><td style='padding:8px 24px'><table role='presentation' width='100%' cellpadding='0' cellspacing='0'><tr>"
+            f"<td class='col' width='49%' valign='top' style='padding:0'>{stack}</td>"
+            f"<td class='gap' width='2%' style='font-size:0;line-height:0'>&nbsp;</td>"
+            f"<td class='col' width='49%' valign='top' style='{box_style(right['accent'])}'>{right['inner']}</td></tr></table></td></tr>")
+
+
 def section(title, sub=""):
     sub = f"<div style='{F}font-size:13px;color:{MUTED};margin-top:4px'>{sub}</div>" if sub else ""
     return (f"<tr><td style='padding:30px 24px 6px'><div style='{F}font-size:22px;font-weight:800;color:{BRAND};letter-spacing:-.2px'>{e(title)}</div>"
@@ -279,7 +288,7 @@ def mix_chart():
         f"<td style='padding:3px 0'><div style='width:{max(2, round(100 * n / total))}%;height:12px;border-radius:6px;background:{colour[s]}'></div></td>"
         f"<td width='44' align='right' style='{F}font-size:12px;color:{MUTED}'>{round(100 * n / total)}%</td></tr>"
         for s, n in mix.items())
-    return (f"<div style='{F}font-size:13px;font-weight:600;color:{INK};margin:22px 0 8px'>Rating mix "
+    return (f"<div style='{F}font-size:13px;font-weight:600;color:{INK};margin:0 0 8px'>Rating mix "
             f"<span style='font-weight:400;color:{MUTED}'>({total} rated items)</span></div>"
             f"<table role='presentation' width='100%' cellpadding='0' cellspacing='0'>{rows}</table>")
 
@@ -407,7 +416,8 @@ def body(preview, img):
                          f"dimensions (PCA), so feedback that says similar things sits close together. The colours are the agent's themes, "
                          f"from reading every item; grey dots fit no theme. The axes have no units: only closeness matters.</div>"))
     rows.append(section("At a glance"))
-    rows.append(grid([box(volume_chart() + mix_chart()), box(themes_chart())]))
+    left = [box(volume_chart())] + ([box(mix_chart())] if mix_chart() else [])
+    rows.append(split(left, box(themes_chart())))
     if ratings_chart():
         rows.append(card(ratings_chart()))
 
@@ -796,7 +806,7 @@ def draw_header():
         else:
             cut = int((h - w / 4) / 2); im = im[cut:h - cut]
         ax.imshow(im, extent=[0, 12.8, 0, 3.2], aspect="auto")
-        ax.add_patch(plt.Rectangle((0, 0), 12.8, 3.2, color="#000000", alpha=.5, lw=0))  # dark overlay keeps the white text readable
+        ax.add_patch(plt.Rectangle((0, 0), 12.8, 3.2, color="#000000", alpha=.68, lw=0))  # dark overlay keeps the white text readable
     else:
         import math
         ax.imshow([[i / 255 for i in range(256)]], extent=[0, 12.8, 0, 3.2], aspect="auto",
