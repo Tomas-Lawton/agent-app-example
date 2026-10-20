@@ -1,6 +1,6 @@
 ---
 name: feedback-brief-setup
-description: Sets up or changes a customer feedback brief in one short conversation - the user's connections (online service, internal warehouse or data store, file), time window, output format (chat, email or both) and schedule - writing the user scope (with the user's confirmation) and the profile, deploying a scheduled run on Google Cloud if wanted, then runs the first brief. Use at the start of a conversation when no user profile exists (including a plain "hi"), or to change a profile, a connection, the recipient, email or the schedule.
+description: Sets up or changes a customer feedback brief in one short conversation - the user's connections (online service, internal warehouse or data store, file), time window, output format (chat, email or both) and schedule - writing the user scope (with the user's confirmation) and the profile, deploying a scheduled run on Google Cloud if wanted, then runs the first brief. Use when the user says "Use the setup skill", or at the start of a conversation when no user profile exists (even a plain "hi"), or to change a profile, a connection, the recipient, email or the schedule.
 ---
 
 # Feedback Brief setup skill

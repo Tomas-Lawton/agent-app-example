@@ -1,6 +1,6 @@
 # Feedback Brief Agent: start here
 
-**Agent: this folder is an application you run for the user. Act on these instructions from the user's first message, whatever it says** ("hi", "start", the folder on its own, anything). Do not wait to be asked, and do not just describe the project.
+**Agent: this folder is an application you run for the user. Act on these instructions from the user's first message, whatever it says** ("Use the setup skill", "hi", the folder on its own, anything). Do not wait to be asked, and do not just describe the project.
 
 ## Your first reply
 

@@ -2,70 +2,42 @@
 
 > **AI agent reading this:** follow [AGENTS.md](AGENTS.md) now. Start setup with the user straight away; don't wait to be asked.
 
-**A customer feedback brief, run entirely by the AI agent you already use.** Open this folder in an agent harness (Antigravity, Gemini CLI, Claude Code, Codex), answer a few questions, and the agent reads your customer feedback, works out what matters, and gives you a checked brief in the chat or by email.
+**A weekly customer feedback brief, run entirely by the AI agent you already use.** Open this folder in an agent harness (Antigravity, Gemini CLI, Claude Code, Codex), answer a few questions, and the agent reads your customer feedback, works out what matters, and sends you a checked brief in the chat and by email.
 
-There is no app to deploy. The harness provides the agent loop; this project provides only the **instructions** (two skill files), a few **small scripts** for the exact work, and the **checks** every brief must pass. It is a working example of a pattern: build a well understood business use case on a general agent instead of a bespoke application, with safety designed into the use case.
+There is no app to deploy. The harness runs the agent; this project provides the **instructions** (two skill files), a few **small scripts** for the exact work, and the **checks** every brief must pass. It is an example of a pattern: a well-understood business use case built on a general agent instead of a bespoke application, with safety designed in.
 
 ## What you get
 
-Every company gets customer feedback: support tickets, surveys, issue trackers, forums, reviews. Someone needs to know **what customers are saying, what changed, and what to do about it**. Each brief gives:
-
-- **Up to three things to act on,** each with an owner and a **draft ticket** for the team, ready to copy into Jira, Linear or GitHub. Nothing is filed for you
-- **The main themes,** each with real quotes **and their sources**, when it started and peaked, and who customers say is affected
-- **What's working:** what customers praise, worth passing on to the teams behind it
-- **A watchlist** of rare but serious feedback (scams, harm, vulnerable customers, regulator complaints, anything your profile says always matters), shown even when there are only a few items
-- **What's new, growing or rising,** computed from real dates
-- **The numbers:** volume, ratings, items per day and per theme, all counted by code
-- **A feedback map:** every item placed near similar feedback, coloured by theme and shaped by source
-
-You get it **in the chat**, **by email**, or both, over the time window you choose (a weekly brief by default). From the brief you can open each draft ticket pre-filled in GitHub, Linear or Jira (you review it and press Create), email it, copy it (in the preview), jump to the evidence and open any source. Emails can't run scripts, so anything else, such as asking why a theme is growing or changing the brief, you do by talking to the agent; the email links back to the conversation when your harness gives it a link.
+- **Up to three things to act on**, each with an owner and a draft ticket you can open pre-filled in GitHub, Linear or Jira (nothing is filed for you)
+- **The main themes**, with real quotes and sources, when each started and peaked, and who is affected
+- **What's working**: what customers praise
+- **A watchlist** of rare but serious feedback, such as scams or vulnerable customers
+- **The numbers and charts**: volume, ratings, trends and a map of similar feedback, all counted by code
+- **Follow-up questions** you can ask the agent, answered from the evidence with citations
 
 ## How to use it
 
-1. **Download the project** and open the folder in your agent harness as its workspace.
-2. **Send any first message**, such as "hi". The agent explains what it does and starts setup. Most harnesses read [`AGENTS.md`](AGENTS.md) automatically; if yours doesn't (for example Claude Code or Gemini CLI), say "read AGENTS.md" first.
-3. **Answer the setup questions,** in one short conversation:
-   - **About you:** your product, who reads the brief, what matters most
-   - **Connections:** what you use for feedback (Zendesk, Intercom, GitHub Issues, BigQuery, an export file…). The agent sets up each connection itself, shows you a sample, and keeps it only when you confirm
-   - **Time window:** how much feedback each brief covers (default the last 7 days)
-   - **Output format:** in the chat and by email by default (or just one). For email, it walks you through a sending address and an app password
-   - **Look (optional):** the brief's name and colours, plus your logo and a header background image if you have them
-   - **Schedule:** on request, or for example "every Monday at 8am". On Google Cloud, the agent deploys the scheduled run itself
-4. **The agent runs your first brief** and presents it. Then keep asking: *"why is the top theme growing?"*, *"show me every scam report"* (answered from the evidence, with citations), or *"run this week's brief"*, *"make it shorter"*, *"add our survey export"*.
+1. **Download the project** and open the folder in your agent harness.
+2. **Say "Use the setup skill".** The agent asks a few questions, one at a time: about you, where your feedback lives (Zendesk, BigQuery, an export file…), the time window, email details, the look, and an optional schedule. It sets up each connection itself and shows you a sample before keeping it.
+3. **The agent runs your first brief** and sends it. Then keep asking: *"why is the top theme growing?"*, *"make it shorter"*, *"add our survey export"*, *"run this week's brief"*.
 
-**Requirements:** an agent harness, Python 3.9 or newer, and `scikit-learn` and `matplotlib` (the agent installs them from `requirements.txt`). Optional: Google Cloud for a BigQuery connection or scheduled runs.
+**Requirements:** an agent harness and Python 3.9 or newer. The agent installs the rest (`requirements.txt`) in the project's own `.venv`. Optional: Google Cloud for BigQuery or scheduled runs.
 
 ## How it works
 
-Each run is four steps. The agent does the judgement; a script ends each step, does the exact work and checks the agent's, and stops with what to fix if anything is wrong.
+Each run is four steps. The agent does the judgement; a script ends each step, does the exact work, checks the agent's work, and stops with what to fix if anything is wrong.
 
 | Step | The agent | The scripts |
 |---|---|---|
-| 1. Collect | | `collect.py` reads every approved connection, removes emails, phone numbers and reference numbers, drops duplicates and keeps the **most recent 500 items** for the agent to read. The headline numbers count everything in the window; if there were more than 500, the brief says which dates the themes cover, and trends compare halves of those dates. `cluster.py` groups similar items with **K-means** on word vectors and lays them out for the map |
-| 2. Read, theme and tag | reads every item, cluster by cluster, writes the themes, then **tags every item** in chunks of 100 | `summarise.py` checks every item is tagged, counts each theme exactly, computes trends and scores, and checks every quote is word for word |
-| 3. Plan and write | picks up to three actions, writes the brief and a draft ticket for each | `render.py` checks the writing against the counts, draws the map, and builds the chat, preview and email versions |
-| 4. Present | shows the brief and handles your replies | `send.py` reruns every check and emails only the approved recipient |
+| 1. Collect | | `collect.py` reads your connections, removes personal details, and keeps the newest 500 items; `cluster.py` groups similar items (TF-IDF, LSA and K-means) |
+| 2. Theme and tag | reads every item, writes the themes, tags every item | `summarise.py` checks every item is tagged, counts each theme, computes trends |
+| 3. Write | picks the actions, writes the brief with citations | `render.py` checks every quote, number and citation, and builds the brief, preview and email |
+| 4. Send | presents the brief, answers follow-ups | `send.py` reruns every check and emails only your approved recipient |
 
-**Reading 500 items without getting lost:** each item is one compact line, similar items arrive together, and tagging happens one chunk at a time. Code checks that no item was skipped, and stops if too many fit no theme.
+## The use case and the client
 
-**What's new or growing:** code compares each theme's share with the previous run, and the first half of the window with the second, so trends come from real dates from the very first run.
-
-## Three layers
-
-| Layer | Decides | Where | Changed by |
-|---|---|---|---|
-| **Use case** | **What happens:** the steps, the checks, the kinds of connection, the limits | [`SKILL.md`](SKILL.md), [`engine/`](engine/), [`engine/scope.json`](engine/scope.json) | The developer |
-| **User scope** | **What it reaches:** your connections, recipient, timezone and schedule | `profiles/<key>/user_scope.json` | Setup only, with your confirmation |
-| **Profile** | **How it's shown:** who reads it, what matters, time window, look, output format | `profiles/<key>/PROFILE.md` | You, any time |
-
-The use case decides what happens; your user scope decides which data; your profile decides how it's shown. You can write anything in your profile and still can't give the agent a new connection, a new recipient or permission to post.
-
-### `SKILL.md` and `PROFILE.md`
-
-The two are deliberately separate: one use case, many clients.
-
-- **[`SKILL.md`](SKILL.md) is the use case.** It is the same for everyone: the four steps, the rules, the file formats and when to run each script. It tells the agent *how to produce a feedback brief*. Only the developer changes it.
-- **`profiles/<key>/PROFILE.md` is the client.** It tells the agent *whose brief this is and what they care about*. A few settings sit at the top; everything below is plain text in the client's own words, which the agent follows when it reads, themes and writes:
+- **[`SKILL.md`](SKILL.md) is the use case**, the same for everyone: how to produce a feedback brief, its steps, rules and checks. Only the developer changes it.
+- **`profiles/<key>/PROFILE.md` is the client**: a few settings, then plain text in their own words that the agent follows. Change it any time, or ask the agent to.
 
   ```
   ---
@@ -77,110 +49,57 @@ The two are deliberately separate: one use case, many clients.
   colours: brand #0b2545, brand2 #13315c, accent #c9a227, tint #eef2f8
   tickets: github capital-bank/cx-feedback
   ---
-  Our tagline is "Banking Built Around You". Lead with anything that blocks customers
-  from paying or getting into their account. Always surface scam reports, even single ones.
-  Keep it short: our reader skims on a phone.
+  Lead with anything that stops customers paying or logging in. Always surface scam reports.
   ```
+- **`profiles/<key>/user_scope.json` is the client's reach**: connections, recipient and schedule. Only setup writes it, with your confirmation, and every run checks it against the use case's limits ([`engine/scope.json`](engine/scope.json)). A profile can change how the brief looks, never what it can reach. Optional images (logo, header background) go in `profiles/<key>/assets/`.
 
-  Only these settings exist (`product`, `brief name`, `reader`, `time window`, `output`, `icon`, `colours`, `tickets`); any other is refused. So you can change anything about the brief by editing one markdown file, or by asking the agent to, and still can't widen its reach.
-- **`profiles/<key>/user_scope.json` is the client's reach,** kept apart on purpose: connections, recipient, timezone and schedule. It is structured so code can check it against the use case scope every run, and only setup writes it, with the user's confirmation.
-
-The same split makes personalisation cheap. Ask *"use our new brand colours"* or *"focus on business customers this month"* and the agent edits the profile; the use case, and its checks, stay the same.
-
-## The engine scripts
-
-The scripts do the exact work and the checks; the agent does the judgement in between. Each one stops with what to fix if anything is wrong.
+## The engine
 
 | Script | What it does |
 |---|---|
-| [`steps/collect.py`](engine/steps/collect.py) | Starts the run. Reads every connection in the user scope through its reader, removes emails, phone numbers and reference numbers, drops duplicates, keeps the most recent 500 items with short ids such as `tickets-012`, then runs `cluster.py` |
-| [`steps/cluster.py`](engine/steps/cluster.py) | Groups similar items with K-means on word vectors, writes the reading parts the agent reads cluster by cluster, lays out the map, and carries over tags from the previous run |
-| [`steps/summarise.py`](engine/steps/summarise.py) | Checks every item is tagged and every quote is word for word, counts each theme exactly, and computes trends (first half against second half, and against the previous run) and scores |
-| [`steps/render.py`](engine/steps/render.py) | Checks the agent's plan and writing against the counts and citations, draws the map and header, and builds the chat brief, the preview, the email, the evidence list, the claims for the verifier and `metrics.json` |
-| [`steps/send.py`](engine/steps/send.py) | The send gate: reruns every check, checks the user scope still fits the use case, requires the verifier's verdicts on unattended runs, and emails only the approved recipient |
-| [`core/config.py`](engine/core/config.py) | Reads the three layers (use case scope, user scope, `PROFILE.md`) and refuses a user scope or profile that goes beyond the use case |
-| [`core/checks.py`](engine/core/checks.py) | Every check on the agent's files: items, themes, tags, plan, content and citations, logged to `checks_log.jsonl` |
-| [`readers/service.py`](engine/readers/service.py) | Reads any online service or feed: approved hosts only, read only, keys from `.env`, respects robots.txt, and stops if access is refused |
-| [`readers/bigquery.py`](engine/readers/bigquery.py) | Reads one named BigQuery table or view with a capped, parametrised query |
-| [`readers/csv_file.py`](engine/readers/csv_file.py) | Reads an export file inside the profile folder |
+| [`steps/collect.py`](engine/steps/collect.py) | Reads every connection in the user scope, removes personal details and duplicates, keeps the newest 500 items |
+| [`steps/cluster.py`](engine/steps/cluster.py) | Groups similar items for reading and lays out the map |
+| [`steps/summarise.py`](engine/steps/summarise.py) | Checks tagging and quotes, counts themes, computes trends and scores |
+| [`steps/render.py`](engine/steps/render.py) | Checks the writing and builds the brief, preview, email and charts |
+| [`steps/send.py`](engine/steps/send.py) | The send gate: reruns every check and emails only the approved recipient |
+| [`core/config.py`](engine/core/config.py) | Reads the use case scope, user scope and profile, and refuses anything beyond the use case |
+| [`core/checks.py`](engine/core/checks.py) | Every check on the agent's files |
+| [`readers/`](engine/readers/) | One read-only reader each for an online service, a BigQuery table, and a file |
 
-**Throwaway code is fine.** Inside its own sandbox the agent can write and run any temporary code it needs on the fly: to inspect an unfamiliar API response while setting up a connection, to explore the data when you ask a follow up question, or to check an odd result. That code lives in the run folder, is deleted when done, and is never part of the use case. Only the scripts above collect feedback, decide what counts and send, so throwaway code can help the agent think but can't widen its reach or skip a check.
-
-## Connections
-
-The use case defines three kinds. You say what you use; **the agent writes the connection for you**, from what it knows of the provider's API or its docs. There is no connector code to write or infrastructure to run, and every connection is tested with you before it's kept.
-
-| Kind | Examples | Bound |
-|---|---|---|
-| **Online service** | Zendesk, Intercom, Freshdesk, GitHub Issues, Discourse, Trustpilot, Typeform, App Store | Read only requests to the hosts you approve; keys stay in a local `.env` or a secret store, never in the project; with a key, private by default |
-| **Internal warehouse or data store** | A BigQuery table or view of support tickets and surveys | Read only, one named view, a capped query written by the reader; private |
-| **File** | An export from any tool | One file inside your profile folder |
-
-**The user picks any provider; the use case decides what a connection is allowed to do.** Private feedback shapes the themes and counts but is only quoted if the user scope allows it (for example a brief that stays inside the company).
+The agent can also write throwaway code in its sandbox, for example to explore an unfamiliar API or answer a follow-up. Only the scripts above collect feedback and send, so throwaway code can't widen its reach or skip a check.
 
 ## Why it's safe
 
-Safety is designed into the use case, not left to the agent:
-
-- **Evidence:** every quote must appear word for word in collected feedback, and every sentence the agent writes cites the items it rests on; code checks each cited item exists and belongs to that theme, and the brief links every citation to the item.
-- **Interpretation is labelled:** quotes and numbers are marked as checked by code; summaries and actions are marked as the agent's interpretation, with the number of items they cite.
-- **Independent verification:** an unattended run only sends once a separate verifier, given just each claim and its cited items, confirms every claim is supported.
-- **Exact parts are code:** the model reads and judges; code counts every item and computes every number.
-- **Fixed reach:** feedback is read only through `collect.py`, from the connections in your user scope, which can never go beyond the use case scope. If a site refuses access, the run records it and never tries another way round.
-- **A send gate:** `send.py` reruns every check and emails only your approved recipient. Nothing in the project files tickets or posts anything.
-- **Reach changes only through setup:** only setup writes your user scope, and only with your confirmation; every run checks it against the use case scope and refuses anything outside it. The strongest lock is the scheduled run: a container built from the project, read only except for `runs/`, with no setup skill at all.
-- **Scheduled runs** carry only the run skill, never the setup skill, so an unattended agent has no instructions for changing its own reach. On Google Cloud it runs as its own least privilege service account, narrower than the person who set it up.
-
-Every run also writes `out/metrics.json`: items tagged, quotes verified, sentences cited, claims verified, how many problems the checks caught and the agent fixed, run time, and tokens when the harness reports them.
-
-**Cost:** scripts do all the predictable work (collecting, grouping, counting, checking, rendering) with no model tokens; items reach the model as compact lines; tags carry over from the previous run; and routine tagging and verification can run on a smaller, faster model. A harness costs more per run than a coded workflow but far less to build and change, which suits infrequent, high value, varied work like this brief.
-
-**Limit:** code proves a citation exists and belongs; whether it truly supports the claim is judged by the verifier and, finally, by the reader, one click away.
+- **Every claim is checked:** quotes must appear word for word, every number comes from code, and every sentence cites the items it rests on. Unattended runs also need an independent verifier to confirm each claim.
+- **Reach is fixed:** feedback is read only through `collect.py`, from read-only connections in your user scope, which can never go beyond the use case. If a site refuses access, the run stops there.
+- **One way out:** only `send.py` sends, and only to your approved recipient. Nothing files tickets or posts anything.
+- **Setup is separate from running:** only setup changes reach, with your confirmation. Scheduled runs carry no setup skill, run in a read-only container, and use a least-privilege account.
 
 ## Scheduling on Google Cloud
 
-When you choose a schedule, setup can deploy it on Google Cloud for you, confirming each access change:
-- a **service account** for the profile with only what it needs (Vertex AI to run the model, its own secrets, read only on any BigQuery dataset)
-- **Secret Manager** for the email password and service keys
-- a **Cloud Run job** built from the [`Dockerfile`](Dockerfile): the project without the setup skill, running Gemini CLI headless, then the send gate
-- **Cloud Storage** for the runs, mounted on the job, so each scheduled brief compares with the last and every run is kept as an audit trail
-- **Cloud Scheduler** on your schedule, in your timezone, after one run triggered by hand and checked with you
-
-The use case itself has no Google Cloud dependency; any scheduler that can start a headless harness works the same way.
+When you choose a schedule, setup deploys it for you, confirming each access change: a service account, Secret Manager for keys, a Cloud Run job from the [`Dockerfile`](Dockerfile), a Cloud Storage bucket for the runs, and Cloud Scheduler. Any scheduler that can start a headless harness works the same way.
 
 ## Configuration
 
-Setup writes everything for you. Secrets live in a `.env` file in the project root, next to `README.md`, which setup creates (it is never committed, so a fresh download has none), or in Secret Manager for scheduled runs:
+Setup writes everything. Secrets live in `.env` in the project root (never committed), or in Secret Manager for scheduled runs:
 
 | Setting | For |
 |---|---|
-| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM` | Email output, through any provider (Gmail, Outlook, iCloud…) with an app password |
-| A key per online service, for example `ZENDESK_AUTH` | Online services that need one; the user scope only names it |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD` | Email, through any provider with an app password |
+| A key per online service, for example `ZENDESK_AUTH` | Services that need one |
 
-A BigQuery connection uses Google application default credentials, or the identity of the cloud job running it.
+BigQuery uses your Google credentials, or the cloud job's identity.
 
 ## Project structure
 
 ```
-AGENTS.md            what the agent does on your first message
-SKILL.md             the use case: four steps, rules and file formats
-setup/SKILL.md       the setup conversation, and deploying a scheduled run
-Dockerfile           the scheduled run's container
-requirements.txt     scikit-learn and matplotlib, for clustering and the map
-engine/
-  scope.json         the use case scope: kinds of connection, item format, limits
-  steps/             collect.py  cluster.py  summarise.py  render.py  send.py
-  core/              config.py (layers and scope check)  checks.py (every check)
-  readers/           service.py (any feed or API)  bigquery.py  csv_file.py
-profiles/            one folder per client, created by setup (the public repository ships with none)
+AGENTS.md          what the agent does when the folder is opened
+SKILL.md           the use case: steps, rules and file formats
+setup/SKILL.md     the setup conversation, and deploying a scheduled run
+Dockerfile         the scheduled run's container
+requirements.txt   scikit-learn and matplotlib
+engine/            scope.json, steps/, core/, readers/
+profiles/          one folder per client, created by setup
 ```
 
-Each run writes to `runs/<key>/<date>/` (not committed): the collected items, the clusters and reading parts, the agent's themes and tags, `summary.json`, and the brief and map in `out/`.
-
-## Status
-
-A new project, being tested. Built: setup, the four steps, the three kinds of connection, clustering and the map, chat, preview and email output, and the Google Cloud deployment instructions. Not yet proven end to end: the Zendesk import and the scheduled run on Google Cloud.
-
-## From harness to code, and back
-
-Each step has a fixed contract: the file it writes, the check it must pass, the tools it may use. So any step can be compiled into code when it must be predictable (clustering is one already: grouping is code, naming the groups is judgement), or unbuilt back into the skill when the model can handle it. The checks stay the same either way.
+Each run writes to `runs/<key>/<date>/` (not committed).
