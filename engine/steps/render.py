@@ -11,6 +11,11 @@ errors = checks.run(cfg, info, "plan", "content")
 if errors:
     sys.exit("FIX brief_plan.json or live_content.json, then run render.py again:\n  " + "\n  ".join(errors))
 x = json.load(open("live_content.json"))
+for a in x.get("actions") or []:  # a ticket is a title, the issue, and the items it rests on (listed at the end)
+    tk = a.get("ticket") or {}
+    if "issue" not in tk and tk.get("body"):
+        tk["items"] = tk.get("items") or checks.citations(tk["body"])
+        tk["issue"] = checks.CITE.sub("", tk["body"]).replace(" .", ".").strip()
 for entry in (x.get("themes") or []) + (x.get("watch") or []):  # a quote's words may be under "text" or "quote"
     for q in entry.get("quotes") or []:
         q.setdefault("text", q.get("quote", ""))
@@ -60,10 +65,10 @@ def claims():
     fields += [(f"theme {t['id']}", t.get("who")) for t in x.get("themes") or [] if t.get("who")]
     fields += [(f"watch {w['id']}", w.get("why")) for w in x.get("watch") or []]
     for a in x.get("actions") or []:
-        fields += [
-            (f"action {a['theme']}", a.get("detail")),
-            (f"ticket {a['theme']}", (a.get("ticket") or {}).get("body")),
-        ]
+        fields.append((f"action {a['theme']}", a.get("detail")))
+        tk = a.get("ticket") or {}
+        if tk.get("issue") and tk.get("items"):
+            fields.append((f"ticket {a['theme']}", f"{tk['issue']} [{', '.join(tk['items'])}]"))
     for where, text in fields:
         for sentence in checks.sentences(text):
             ids = checks.citations(sentence)
@@ -305,13 +310,14 @@ def ticket(a, preview):
         f"<div style='background:{TINT};border-radius:10px;padding:10px 12px;margin-top:10px'>"
         f"<div style='{F}font-size:11px;color:{MUTED};text-transform:uppercase;letter-spacing:.5px'>Draft ticket, not filed</div>"
         f"<div style='{F}font-size:14px;font-weight:700;color:{INK};margin-top:3px'>{e(tk.get('title'))}</div>"
-        f"<div style='{F}font-size:13px;line-height:1.55;color:{INK};margin-top:4px;white-space:pre-line'>{cite(tk.get('body'))}</div>"
+        f"<div style='{F}font-size:13px;line-height:1.55;color:{INK};margin-top:4px'>{e(tk.get('issue'))}</div>"
+        f"<div style='{F}font-size:12px;color:{MUTED};margin-top:4px'>Feedback: {cite('[' + ', '.join(tk.get('items') or []) + ']')}</div>"
         f"{ticket_buttons(tk, preview)}</div>"
     )
 
 
 def ticket_buttons(tk, preview):
-    title, body = tk.get("title", ""), ticket_text(tk.get("body", ""))
+    title, body = tk.get("title", ""), ticket_text(tk)
     out = copy_button(title + chr(10) + chr(10) + body, preview, "Copy ticket")
     made = create_link(title, body)
     if made:
@@ -331,19 +337,13 @@ def email_link(subject, body, preview):
     return f"mailto:?subject={q(subject)}&body={q(body)}"
 
 
-def ticket_text(body):
-    """A copied ticket keeps its evidence: each citation becomes the item's source, date and link."""
-
-    def ref(m):
-        out = []
-        for i in [i.strip() for i in m.group(1).split(",")]:
-            it = items.get(i, {})
-            out.append(
-                f"{it.get('sourceLabel', i)} {it.get('date', '')}" + (f" {it['url']}" if it.get("url") else f" ({i})")
-            )
-        return "(" + "; ".join(out) + ")"
-
-    return checks.CITE.sub(ref, body)
+def ticket_text(tk):
+    """The ticket as plain text: the issue, then the feedback it rests on, each with its source, date and link."""
+    lines = [tk.get("issue", ""), "", "Feedback:"]
+    for i in tk.get("items") or []:
+        it = items.get(i, {})
+        lines.append(f"- {it.get('sourceLabel', i)} {it.get('date', '')}" + (f" {it['url']}" if it.get("url") else f" ({i})"))
+    return "\n".join(lines)
 
 
 # ---------------------------------------------------------------- the brief
@@ -449,6 +449,29 @@ PRIVATE_NOTE = (
     f"<div style='{F}font-size:12px;color:{MUTED};margin-top:10px;font-style:italic'>No quotes: this feedback is private, "
     "so it is described and cited but not quoted (setup can allow quoting for a brief that stays inside the company).</div>"
 )
+
+
+def run_minutes():
+    if not info.get("startedAt"):
+        return None
+    started = datetime.datetime.fromisoformat(info["startedAt"])
+    return round((datetime.datetime.now().astimezone() - started).total_seconds() / 60, 1)
+
+
+def run_tokens():
+    """Total tokens, if the harness reported them (usage.json)."""
+    if not os.path.exists("usage.json"):
+        return None
+    usage = json.load(open("usage.json"))
+    total = usage.get("totalTokens") or (usage.get("inputTokens") or 0) + (usage.get("outputTokens") or 0)
+    return total or None
+
+
+def run_stats():
+    minutes, tokens = run_minutes(), run_tokens()
+    took = f"Made in {minutes:g} minutes" if minutes is not None else "Run time unknown"
+    used = f"{tokens:,} tokens" if tokens else "tokens not reported by this harness"
+    return f"{took} · {used}."
 
 
 def day(d):
@@ -636,7 +659,7 @@ def body(preview, img):
     if x.get("actions"):
         rows.append(
             section(
-                "Things to act on", "Ranked by impact, reach and growth, each with a draft ticket for the owning team"
+                "Take action", "Ranked by impact, reach and growth, each with a draft ticket for the owning team"
             )
         )
         for n, a in enumerate(x["actions"], 1):
@@ -696,8 +719,8 @@ def body(preview, img):
         f"<tr><td style='padding:22px 24px 26px'><div style='{F}font-size:12px;line-height:1.65;color:{MUTED}'>"
         f"<b>Sources.</b> {'; '.join(srcs)}.<br/>{e(x['footer'])}<br/>"
         f"Written by an AI agent. Every quote was checked word for word against the collected feedback, every number was "
-        f"computed by code, and private feedback is described but never quoted. Names, emails and reference numbers are "
-        f"removed before anything is written.</div></td></tr>"
+        f"computed by code, and private feedback is quoted only when setup allows it. Names, emails and reference numbers "
+        f"are removed before anything is written.<br/>{e(run_stats())}</div></td></tr>"
     )
     rows.append(evidence(preview))
     return "".join(rows)
@@ -803,14 +826,14 @@ def text():
         out += [f"  \"{q['text']}\" ({items.get(q['item'], {}).get('sourceLabel', '')})" for q in w.get("quotes") or []]
     for a in x.get("actions") or []:
         tk = a.get("ticket") or {}
-        out += ["", f"Draft ticket: {tk.get('title', '')}", tk.get("body", "")]
+        out += ["", f"Draft ticket: {tk.get('title', '')}", ticket_text(tk)]
     if x.get("questions"):
         out += [
             "",
             "Follow-up questions can't be answered by email yet; open the project in your agent harness and ask there, for example:",
         ]
         out += [f"  - {q}" for q in x["questions"]]
-    out += ["", x["footer"]]
+    out += ["", x["footer"], run_stats()]
     return "\n".join(out)
 
 
@@ -878,13 +901,13 @@ def markdown():
                 it = items.get(q["item"], {})
                 out += [f"> \u201c{q['text']}\u201d", f"> \u2014 {it.get('sourceLabel', '')}, {it.get('date', '')}", ""]
     if x.get("actions"):
-        out += ["## Things to act on", ""]
+        out += ["## Take action", ""]
         for n, a in enumerate(x["actions"], 1):
             tk = a.get("ticket") or {}
             out += [
                 f"{n}. **{a['title']}** {a['detail']} *Owner: {a['owner']}*",
                 f"   > **Draft ticket: {tk.get('title', '')}**  ",
-                f"   > {tk.get('body', '')}",
+                f"   > {tk.get('issue', '')} *Feedback: {', '.join(tk.get('items') or [])}*",
                 "",
             ]
     if CITED:
@@ -905,6 +928,8 @@ def markdown():
     out += [
         "---",
         x["footer"],
+        "",
+        f"*{run_stats()}*",
         "",
         "*Summaries and actions are the agent's interpretation, with the items they cite; quotes and numbers are checked by code.*",
     ]
@@ -1184,7 +1209,7 @@ agent_sentences = sum(
     len(checks.sentences(v))
     for v in [t.get("summary") for t in x["themes"]]
     + [a.get("detail") for a in x.get("actions") or []]
-    + [(a.get("ticket") or {}).get("body") for a in x.get("actions") or []]
+    + [(a.get("ticket") or {}).get("issue") for a in x.get("actions") or []]
 )
 metrics = {
     "date": info["date"],
@@ -1203,15 +1228,7 @@ metrics = {
     "checkFailuresCaught": sum(len(r["errors"]) for r in log),
     "checkRunsFailed": len(log),
     "tagsCarried": len(json.load(open("tags/carried.json"))) if os.path.exists("tags/carried.json") else 0,
-    "minutes": (
-        round(
-            (datetime.datetime.now().astimezone() - datetime.datetime.fromisoformat(info["startedAt"])).total_seconds()
-            / 60,
-            1,
-        )
-        if info.get("startedAt")
-        else None
-    ),
+    "minutes": run_minutes(),
     "usage": (
         json.load(open("usage.json")) if os.path.exists("usage.json") else None
     ),  # tokens, if the harness reports them

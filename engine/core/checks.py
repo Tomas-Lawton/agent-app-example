@@ -281,9 +281,20 @@ def check_actions(errors, content, kept, by_id):
         allowed = tagged_items(kept.get(action.get("theme")))
         ticket = action.get("ticket") or {}
         check_cited(errors, f"actions[{k}].detail", action.get("detail"), allowed, by_id)
-        check_cited(errors, f"actions[{k}].ticket.body", ticket.get("body"), allowed, by_id)
-        for field in ("title", "body"):
+        if "issue" not in ticket and ticket.get("body"):  # the older shape: citations inside the body
+            check_cited(errors, f"actions[{k}].ticket.body", ticket.get("body"), allowed, by_id)
+            check_text(errors, f"actions[{k}].ticket.title", ticket.get("title"))
+            continue
+        for field in ("title", "issue"):
             check_text(errors, f"actions[{k}].ticket.{field}", ticket.get(field))
+        cited = ticket.get("items") or []
+        if not cited:
+            errors.append(f"`actions[{k}].ticket.items` must list the feedback the ticket rests on")
+        for item_id in cited:
+            if item_id not in by_id:
+                errors.append(f"`actions[{k}].ticket.items` lists `{item_id}`, which is not a collected item")
+            elif item_id not in allowed:
+                errors.append(f"`actions[{k}].ticket.items` lists `{item_id}`, which is not tagged with this theme")
 
 
 def numbers_in(text):
@@ -324,7 +335,7 @@ def check_numbers(errors, content, by_id):
         fields += [(f"actions[{k}].title", action.get("title")), (f"actions[{k}].detail", action.get("detail"))]
         fields += [
             (f"actions[{k}].ticket.title", ticket.get("title")),
-            (f"actions[{k}].ticket.body", ticket.get("body")),
+            (f"actions[{k}].ticket.issue", ticket.get("issue") or ticket.get("body")),
         ]
     for k, theme in enumerate(content.get("themes") or []):
         fields += [(f"themes[{k}].title", theme.get("title")), (f"themes[{k}].summary", theme.get("summary"))]
