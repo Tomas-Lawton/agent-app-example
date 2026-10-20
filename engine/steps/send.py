@@ -12,7 +12,7 @@ Email settings come from a .env file in the repository root (never committed), w
 """
 import os, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # engine/
-import argparse, email, smtplib, ssl
+import argparse, email, json, smtplib, ssl
 from email import policy
 from email.utils import formataddr
 from core import config, checks
@@ -48,6 +48,14 @@ if os.path.isdir(os.path.join(config.ROOT, ".git")) and shutil.which("git"):
 else:
     print("warning: not a git checkout, so the engine and user scope can't be verified against an approved version")
 errors = checks.run(cfg, info, "items", "themes", "plan", "content")
+# 3. unattended runs need every cited claim confirmed by the independent verifier (SKILL.md, step 3)
+if os.environ.get("BRIEF_UNATTENDED") == "1":
+    claims = json.load(open("out/claims.json")) if os.path.exists("out/claims.json") else []
+    verdicts = json.load(open("verdicts.json")) if os.path.exists("verdicts.json") else {}
+    unverified = [c["id"] for c in claims if not verdicts.get(c["id"], {}).get("supported")]
+    if not claims or unverified:
+        errors.append(f"verify: {len(unverified) or 'all'} cited claims are not confirmed by the verifier (verdicts.json); "
+                      "an unattended brief is only sent when every claim is supported by the items it cites")
 if errors or not os.path.exists("out/email.eml"):
     sys.exit("BLOCKED: checks failed:\n  " + "\n  ".join(errors or ["out/email.eml not found; run render.py first"]))
 print("gate: recipient in the user scope, every check passed")

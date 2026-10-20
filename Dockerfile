@@ -11,8 +11,8 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 RUN rm -rf setup .env runs && mkdir runs && chmod -R a-w /app && chmod -R u+w /app/runs
-ENV GOOGLE_GENAI_USE_VERTEXAI=true
+ENV GOOGLE_GENAI_USE_VERTEXAI=true BRIEF_UNATTENDED=1
 # PROFILE, GOOGLE_CLOUD_PROJECT and GOOGLE_CLOUD_LOCATION are set on the Cloud Run job; a Cloud Storage bucket is
 # mounted at /app/runs so runs persist. The .git folder is kept so the send gate can verify the engine is unchanged.
-CMD gemini --yolo -p "Run the feedback brief for profile ${PROFILE}, following SKILL.md. This is a scheduled run: stop after step 3; the job sends it." \
+CMD gemini --yolo -p "Run the feedback brief for profile ${PROFILE}, following SKILL.md. This is a scheduled run: do step 3 including the verifier, then stop; the job sends it." \
     && python3 engine/steps/send.py "${PROFILE}"

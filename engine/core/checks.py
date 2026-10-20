@@ -3,12 +3,15 @@
   items    only approved connections, inside the window
   themes   well formed, scored by code, above threshold; every quote word for word from a real, public item tagged with it
   plan     every pick is a kept, scored theme
-  content  follows the plan; every quote is a checked quote; every action has a draft ticket; every number traces to
-           summary.json or the feedback
+  content  follows the plan; every quote is a checked quote; every action has a draft ticket; every sentence the agent
+           writes in a summary, action or ticket cites the items it rests on, and each cited item exists and is tagged
+           with that theme; every number traces to summary.json or the feedback
+Failures are also appended to checks_log.jsonl in the run folder, so metrics can count what the checks caught.
 """
 import json, os, re
 
 SLUG = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
+CITE = re.compile(r"\[\s*([A-Za-z0-9_]+-\d{3}(?:\s*,\s*[A-Za-z0-9_]+-\d{3})*)\s*\]")
 SUBS = {"\u2018": "'", "\u2019": "'", "\u201c": '"', "\u201d": '"', "\u2026": "...", "\u00a0": " "}
 
 
@@ -26,6 +29,26 @@ def norm(s):
 def verbatim(quote, item):
     q = norm(quote).strip(" .\"'")
     return bool(q) and (q in norm(item.get("text")) or q in norm(item.get("title")))
+
+
+def citations(text):
+    """Item ids cited in a piece of text, as written: [tickets-012] or [tickets-012, survey-087]."""
+    return [i.strip() for m in CITE.findall(str(text or "")) for i in m.split(",")]
+
+
+def sentences(text):
+    return [x for x in re.split(r"(?<=[.!?])\s+(?=[A-Z])", str(text or "").strip()) if x.strip()]
+
+
+def _cited(err, path, text, allowed, by_id):
+    """Every sentence cites at least one item; every cited item exists and belongs to the theme."""
+    for n, sentence in enumerate(sentences(text)):
+        ids = citations(sentence)
+        if not ids:
+            err.append(f"`{path}` sentence {n + 1} cites no items; end it with the ids it rests on, like [tickets-012, survey-087]")
+        for i in ids:
+            if i not in by_id: err.append(f"`{path}` cites `{i}`, which is not a collected item")
+            elif allowed is not None and i not in allowed: err.append(f"`{path}` cites `{i}`, which is not tagged with this theme")
 
 
 def _text(err, path, v):
@@ -102,6 +125,14 @@ def content(cfg, info):
     if [a.get("theme") for a in x.get("actions") or []] != [a.get("theme") for a in p.get("actions") or []]: err.append("`actions` must follow the plan")
     if [t.get("id") for t in x.get("themes") or []] != p.get("themes"): err.append("`themes` must be the plan's themes, in order")
     for k, t in enumerate(x.get("themes") or []):
+        _cited(err, f"themes[{k}].summary", t.get("summary"), set((kept.get(t.get("id")) or {}).get("computed", {}).get("items") or []), by_id)
+    for k, a in enumerate(x.get("actions") or []):
+        allowed = set((kept.get(a.get("theme")) or {}).get("computed", {}).get("items") or [])
+        _cited(err, f"actions[{k}].detail", a.get("detail"), allowed, by_id)
+        _cited(err, f"actions[{k}].ticket.body", (a.get("ticket") or {}).get("body"), allowed, by_id)
+    for i in citations(x.get("headline")):
+        if i not in by_id: err.append(f"`headline` cites `{i}`, which is not a collected item")
+    for k, t in enumerate(x.get("themes") or []):
         ev = {(e.get("item"), norm(e.get("quote"))) for e in (kept.get(t.get("id")) or {}).get("evidence") or []}
         if not 1 <= len(t.get("quotes") or []) <= lim["maxQuotesPerTheme"]: err.append(f"`themes[{k}]` shows 1 to {lim['maxQuotesPerTheme']} quotes")
         for j, q in enumerate(t.get("quotes") or []):
@@ -118,7 +149,7 @@ def content(cfg, info):
     fields += [(f"themes[{k}].{f}", t.get(f)) for k, t in enumerate(x.get("themes") or []) for f in ("title", "summary")]
     fields += [(f"actions[{k}].ticket.{f}", (a.get("ticket") or {}).get(f)) for k, a in enumerate(x.get("actions") or []) for f in ("title", "body")]
     for path, text in fields:
-        for n in _numbers(text):
+        for n in _numbers(CITE.sub(" ", str(text or ""))):  # item ids in citations aren't numbers
             if n not in known: err.append(f"`{path}` uses the number {n}, which is not in summary.json or the feedback")
     return err
 
@@ -142,5 +173,10 @@ def _numbers(text):
 
 
 def run(cfg, info, *names):
-    """Run the named checks; return every error, labelled."""
-    return [f"{n}: {e}" for n in names for e in globals()[n](cfg, info)]
+    """Run the named checks; return every error, labelled, and log failures for the run's metrics."""
+    errors = [f"{n}: {e}" for n in names for e in globals()[n](cfg, info)]
+    if errors:
+        import datetime
+        with open("checks_log.jsonl", "a") as f:
+            f.write(json.dumps({"at": datetime.datetime.now().isoformat(timespec="seconds"), "checks": list(names), "errors": errors}) + "\n")
+    return errors

@@ -9,14 +9,17 @@ coloured by the agent's theme) with matplotlib. Writes:
   out/brief.md       the brief as markdown, for the chat of any harness
   out/map.png        the feedback map (colour shows the theme, shape shows the connection)
   out/header.png     header artwork in the profile's colours (or the profile's own assets/header.png)
-  out/preview.html   the full visual brief, with copy buttons
+  out/preview.html   the full visual brief, with copy buttons and every item collected
+  out/evidence.html  every item, numbered as cited (attached to the email)
+  out/claims.json    every cited sentence with the text of its items, for the independent verifier
+  out/metrics.json   grounding, coverage and guardrail numbers for this run
   out/email.html, out/email.txt, out/email.eml   the email
 The reader can copy each action's draft ticket and open any source. Everything else is done by talking to the agent.
 Nothing is filed or posted for them.
 """
 import os, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # engine/
-import base64, datetime, glob, html, json
+import base64, datetime, glob, hashlib, html, json
 from email.message import EmailMessage
 from email.utils import format_datetime, make_msgid
 from core import config, checks
@@ -42,6 +45,30 @@ PRODUCT = cfg.get("product", {})
 F = "font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Arial,Helvetica,sans-serif;"  # no quotes: styles sit in single quoted attributes
 e = lambda s: html.escape(str(s if s is not None else ""))
 themes_by_id = {t["id"]: t for t in S["themes"]}
+kept_themes = {t["id"]: t for t in json.load(open("themes.json"))["themes"] if t.get("decision") == "keep"}
+CITED = []  # item ids in order of first citation, numbered [1], [2] ... across the brief
+
+
+def claims():
+    """Every sentence the agent wrote with citations, with the text of the items it cites, for the verifier."""
+    out = []
+    fields = [("headline", x.get("headline"))]
+    fields += [(f"theme {t['id']}", t.get("summary")) for t in x.get("themes") or []]
+    for a in x.get("actions") or []:
+        fields += [(f"action {a['theme']}", a.get("detail")), (f"ticket {a['theme']}", (a.get("ticket") or {}).get("body"))]
+    for where, text in fields:
+        for sentence in checks.sentences(text):
+            ids = checks.citations(sentence)
+            if ids:
+                plain = checks.CITE.sub("", sentence).strip()
+                out.append({"id": hashlib.sha1(f"{where}|{plain}".encode()).hexdigest()[:10], "where": where, "claim": plain,
+                            "cited": [{"id": i, "text": ((items.get(i, {}).get("title") or "") + " " + items.get(i, {}).get("text", "")).strip()} for i in ids]})
+    return out
+
+
+CLAIMS = claims()
+VERDICTS = json.load(open("verdicts.json")) if os.path.exists("verdicts.json") else {}
+verified = lambda where: bool(VERDICTS) and all(VERDICTS.get(c["id"], {}).get("supported") for c in CLAIMS if c["where"] == where)
 SRC_COLOURS = ["#334155", "#0f766e", "#9333ea", "#b45309", "#be123c"]
 SRC_MARKERS = ["o", "^", "s", "D", "P"]
 SRC_SYMBOLS = ["&#9679;", "&#9650;", "&#9632;", "&#9670;", "&#10010;"]  # the same shapes, for the html
@@ -110,6 +137,26 @@ def source_tag(sid):
             f"border:1px solid {colour};border-radius:999px;padding:1px 8px;margin-right:6px'>{symbol} {source_label(sid)}</span>")
 
 
+def cite(text):
+    """Escape the agent's text and turn its citations into numbered links to the evidence list."""
+    def link(m):
+        refs = []
+        for i in [i.strip() for i in m.group(1).split(",")]:
+            if i not in CITED:
+                CITED.append(i)
+            refs.append(f"<a href='#ev-{e(i)}' style='color:{BRAND};text-decoration:none'>{CITED.index(i) + 1}</a>")
+        return f"<sup style='{F}font-size:10px'>[{','.join(refs)}]</sup>"
+    return checks.CITE.sub(link, e(text))
+
+
+def label(kind, where=None, n=0):
+    """Small labels that show which parts code checked and which are the agent's reading."""
+    if kind == "checked":
+        return f"<span style='{F}font-size:11px;color:#15803d;font-weight:600'>&#10003; Word for word, checked against the source</span>"
+    tick = " &middot; <span style='color:#15803d'>&#10003; claims verified</span>" if where and verified(where) else ""
+    return f"<div style='{F}font-size:11px;color:{MUTED};margin-top:4px;font-style:italic'>Agent's interpretation &middot; cites {n} item{'s' if n != 1 else ''}{tick}</div>"
+
+
 def quote(q):
     it = items.get(q["item"], {})
     meta = source_tag(it.get("source")) + " &middot; ".join(filter(None, [e(it.get("date")), stars(it.get("rating"), it.get("ratingScale"))]))
@@ -126,8 +173,19 @@ def ticket(a, preview):
     return (f"<div style='background:{TINT};border-radius:10px;padding:10px 12px;margin-top:10px'>"
             f"<div style='{F}font-size:11px;color:{MUTED};text-transform:uppercase;letter-spacing:.5px'>Draft ticket, not filed</div>"
             f"<div style='{F}font-size:14px;font-weight:700;color:{INK};margin-top:3px'>{e(tk.get('title'))}</div>"
-            f"<div style='{F}font-size:13px;line-height:1.55;color:{INK};margin-top:4px;white-space:pre-line'>{e(tk.get('body'))}</div>"
-            f"{copy_button(tk.get('title', '') + chr(10) + chr(10) + tk.get('body', ''), preview, 'Copy ticket')}</div>")
+            f"<div style='{F}font-size:13px;line-height:1.55;color:{INK};margin-top:4px;white-space:pre-line'>{cite(tk.get('body'))}</div>"
+            f"{copy_button(tk.get('title', '') + chr(10) + chr(10) + ticket_text(tk.get('body', '')), preview, 'Copy ticket')}</div>")
+
+
+def ticket_text(body):
+    """A copied ticket keeps its evidence: each citation becomes the item's source, date and link."""
+    def ref(m):
+        out = []
+        for i in [i.strip() for i in m.group(1).split(",")]:
+            it = items.get(i, {})
+            out.append(f"{it.get('sourceLabel', i)} {it.get('date', '')}" + (f" {it['url']}" if it.get("url") else f" ({i})"))
+        return "(" + "; ".join(out) + ")"
+    return checks.CITE.sub(ref, body)
 
 
 # ---------------------------------------------------------------- the brief
@@ -176,7 +234,7 @@ def body(preview, img):
         f"<div style='{F}font-size:26px;font-weight:700;color:#ffffff;margin-top:2px'>{e(NAME)}</div>"
         f"<div style='{F}font-size:13px;color:#ffffff;opacity:.9;margin-top:4px'>{e(x['meta']['dateLabel'])} &middot; feedback from {e(x['meta']['windowLabel'])}</div>"
         f"</td></tr></table></td></tr>",
-        f"<tr><td style='padding:22px 24px 4px'><div style='{F}font-size:18px;line-height:1.5;color:{INK}'>{e(x['headline'])}</div></td></tr>",
+        f"<tr><td style='padding:22px 24px 4px'><div style='{F}font-size:18px;line-height:1.5;color:{INK}'>{cite(x['headline'])}</div></td></tr>",
         f"<tr><td style='padding:14px 24px 0'><table role='presentation' width='100%' cellpadding='0' cellspacing='0' "
         f"style='background:#ffffff;border:1px solid {LINE};border-radius:12px'><tr>"
         + stat("Items", t["items"], delta(ch.get("items"), better="none") if ch else "first edition")
@@ -215,7 +273,9 @@ def body(preview, img):
             f"<a name='{e(th['id'])}' id='{e(th['id'])}'></a><div>{pill(s['kind'], KIND.get(s['kind'], BRAND), solid=True)}{trend}</div>"
             f"<div style='{F}font-size:17px;font-weight:700;color:{INK};margin-top:4px'>{e(th['title'])}</div>"
             f"<div style='{F}font-size:12px;color:{MUTED};margin-top:3px'>{size}{prev}{rating}</div>"
-            f"<div style='{F}font-size:14px;line-height:1.55;color:{INK};margin-top:8px'>{e(th['summary'])}</div>"
+            f"<div style='{F}font-size:14px;line-height:1.55;color:{INK};margin-top:8px'>{cite(th['summary'])}</div>"
+            + label("interpretation", f"theme {th['id']}", len(set(checks.citations(th['summary']))))
+            + f"<div style='margin-top:10px'>{label('checked')}</div>"
             + "".join(quote(q) for q in th["quotes"])
             + f"<div style='{F}font-size:12px;color:{MUTED};margin-top:10px'>From {srcs}</div>",
             accent=KIND.get(s["kind"], BRAND)))
@@ -228,8 +288,9 @@ def body(preview, img):
                 f"<td width='40' valign='top'><div style='{F}width:30px;height:30px;border-radius:15px;background:{ACCENT};color:#fff;"
                 f"font-weight:700;font-size:15px;line-height:30px;text-align:center'>{n}</div></td>"
                 f"<td valign='top'><div style='{F}font-size:16px;font-weight:700;color:{INK}'>{e(a['title'])}</div>"
-                f"<div style='{F}font-size:14px;line-height:1.55;color:{INK};margin-top:4px'>{e(a['detail'])}</div>"
-                f"<div style='{F}font-size:12px;color:{MUTED};margin-top:6px'>Owner: {e(a['owner'])}</div>"
+                f"<div style='{F}font-size:14px;line-height:1.55;color:{INK};margin-top:4px'>{cite(a['detail'])}</div>"
+                + label("interpretation", f"action {a['theme']}", len(set(checks.citations(a['detail']))))
+                + f"<div style='{F}font-size:12px;color:{MUTED};margin-top:6px'>Owner: {e(a['owner'])}</div>"
                 + ticket(a, preview)
                 + f"</td></tr></table>"))
 
@@ -253,7 +314,29 @@ def body(preview, img):
         f"Written by an AI agent. Every quote was checked word for word against the collected feedback, every number was "
         f"computed by code, and private feedback is described but never quoted. Names, emails and reference numbers are "
         f"removed before anything is written.</div></td></tr>")
+    rows.append(evidence(preview))
     return "".join(rows)
+
+
+def evidence_row(i, n=None):
+    it = items.get(i, {})
+    num = f"<b>[{n}]</b> " if n else ""
+    link = f" &middot; <a href='{e(it['url'])}' style='color:{BRAND}'>open</a>" if it.get("url") else ""
+    text = (f"{it['title']}: " if it.get("title") else "") + it.get("text", "")
+    return (f"<tr id='ev-{e(i)}'><td style='{F}font-size:12px;line-height:1.5;color:{INK};padding:6px 0;border-top:1px solid {LINE}'>"
+            f"{num}{source_tag(it.get('source'))}<span style='color:{MUTED}'>{e(i)} &middot; {e(it.get('date'))} "
+            f"{stars(it.get('rating'), it.get('ratingScale'))}{link}</span><br/>{e(text)}</td></tr>")
+
+
+def evidence(preview):
+    """The items the brief cites, numbered; the preview and evidence.html also list every item collected."""
+    cited = "".join(evidence_row(i, n) for n, i in enumerate(CITED, 1))
+    every = "".join(evidence_row(i) for i in items if i not in CITED) if preview else ""
+    more = (f"<div style='{F}font-size:13px;font-weight:700;color:{INK};margin:18px 0 4px'>Every other item collected ({len(items) - len(CITED)})</div>"
+            f"<table role='presentation' width='100%' cellpadding='0' cellspacing='0'>{every}</table>") if preview else (
+            f"<div style='{F}font-size:12px;color:{MUTED};margin-top:8px'>Every item collected is in the attached evidence.html.</div>")
+    return (section("Evidence", "Every item the brief cites, then everything collected") + card(
+            f"<table role='presentation' width='100%' cellpadding='0' cellspacing='0'>{cited}</table>{more}"))
 
 
 COPY_JS = """<script>
@@ -334,7 +417,14 @@ def markdown():
         for n, a in enumerate(x["actions"], 1):
             tk = a.get("ticket") or {}
             out += [f"{n}. **{a['title']}** {a['detail']} *Owner: {a['owner']}*", f"   > **Draft ticket: {tk.get('title', '')}**  ", f"   > {tk.get('body', '')}", ""]
-    out += ["---", x["footer"]]
+    if CITED:
+        out += ["## Evidence", ""]
+        for n, i in enumerate(CITED, 1):
+            it = items.get(i, {})
+            src = f"[{it.get('sourceLabel', '')}]({it['url']})" if it.get("url") else it.get("sourceLabel", "")
+            out.append(f"{n}. `{i}` · {src} · {it.get('date', '')}: {it.get('text', '')[:200]}")
+        out.append("")
+    out += ["---", x["footer"], "", "*Summaries and actions are the agent's interpretation, with the items they cite; quotes and numbers are checked by code.*"]
     return "\n".join(out)
 
 
@@ -419,8 +509,28 @@ os.makedirs("out", exist_ok=True)
 made = {"map.png": draw_map(), "header.png": draw_header()}
 cids = {name: make_msgid(domain="brief.local")[1:-1] for name, ok in made.items() if ok}
 uri = lambda name: ("data:image/png;base64," + base64.b64encode(open(f"out/{name}", "rb").read()).decode()) if name in cids else ""
+html_preview = page(uri, preview=True)  # first render numbers the citations
 open("out/brief.md", "w").write(markdown())
-open("out/preview.html", "w").write(page(uri, preview=True))
+open("out/preview.html", "w").write(html_preview)
+open("out/evidence.html", "w").write(f"<!doctype html><html><head><meta charset='utf-8'/><title>Evidence</title></head><body style='margin:24px;background:{BG}'>"
+                                     f"<table role='presentation' width='100%' style='max-width:1000px;margin:0 auto'>{evidence(True)}</table></body></html>")
+json.dump(CLAIMS, open("out/claims.json", "w"), indent=1, ensure_ascii=False)
+log = [json.loads(l) for l in open("checks_log.jsonl")] if os.path.exists("checks_log.jsonl") else []
+tags_all = {}
+for p_ in sorted(glob.glob("tags/part_*.json")):
+    tags_all.update(json.load(open(p_)))
+agent_sentences = sum(len(checks.sentences(v)) for v in [t.get("summary") for t in x["themes"]] + [a.get("detail") for a in x.get("actions") or []]
+                      + [(a.get("ticket") or {}).get("body") for a in x.get("actions") or []])
+metrics = {
+    "date": info["date"], "items": len(items), "itemsTagged": sum(1 for i in items if i in tags_all), "untaggedShare": S.get("untaggedShare"),
+    "connections": {c["id"]: c["status"] for c in S.get("connections", [])},
+    "quotesVerified": sum(len(t.get("evidence") or []) for t in kept_themes.values()), "quotesShown": sum(len(t["quotes"]) for t in x["themes"]),
+    "agentSentences": agent_sentences, "sentencesCited": sum(1 for c in CLAIMS if c["where"] != "headline"), "itemsCited": len(CITED),
+    "claims": len(CLAIMS), "claimsVerified": sum(1 for c in CLAIMS if VERDICTS.get(c["id"], {}).get("supported")),
+    "claimsUnsupported": [c["id"] for c in CLAIMS if c["id"] in VERDICTS and not VERDICTS[c["id"]].get("supported")],
+    "checkFailuresCaught": sum(len(r["errors"]) for r in log), "checkRunsFailed": len(log),
+}
+json.dump(metrics, open("out/metrics.json", "w"), indent=2)
 html_part = page(lambda name: f"cid:{cids[name]}" if name in cids else "")
 open("out/email.html", "w").write(html_part)
 open("out/email.txt", "w").write(text())
@@ -429,6 +539,7 @@ m["Subject"], m["To"] = x["subject"], cfg["recipient"]
 m["Date"] = format_datetime(datetime.datetime.now().astimezone())
 m.set_content(text())
 m.add_alternative(html_part, subtype="html")
+m.add_attachment(open("out/evidence.html", "rb").read(), "text", "html", filename="evidence.html")
 for name, cid in cids.items():
     m.get_payload()[1].add_related(open(f"out/{name}", "rb").read(), "image", "png", cid=f"<{cid}>", disposition="inline", filename=name)
 open("out/email.eml", "wb").write(bytes(m))

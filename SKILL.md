@@ -36,7 +36,9 @@ Run every command from the repository root. Write your files in the run folder t
 **3. Plan and write.** Write `brief_plan.json` and `live_content.json`, then run `python3 engine/steps/render.py <key>`.
 - Up to three actions, on themes scoring 6 or more, most important first, owned by roles. Praise is never an action. If nothing material changed, set `quietWeek: true` and say so.
 - Each action has a **draft ticket** for the owning team: a clear title, and a body with what's happening, the evidence (counts from `summary.json`, a short quote), and what to check first. Never file it.
-- Copy `dateLabel` and `windowLabel` from `run.json`; start `subject` with the brief's name; quotes come from the theme's `evidence`; numbers only from `summary.json`. No links in prose (render adds sources, links and buttons).
+- **Cite as you write.** End every sentence in a theme summary, action detail and ticket body with the items it rests on, like `[tickets-012, survey-087]`, using items tagged with that theme. Code checks every sentence has citations and every cited item exists and belongs; the brief links each citation to the item.
+- Copy `dateLabel` and `windowLabel` from `run.json`; start `subject` with the brief's name; quotes come from the theme's `evidence`; numbers only from `summary.json`. No links in prose (render adds sources, links and citations).
+- **Verify** (required for scheduled runs, recommended before any email): `render.py` writes `out/claims.json`, every cited sentence with the text of its items. Give **only that file** to a fresh sub-agent (or, without sub-agents, judge it yourself without looking back at your own notes) and have it write `verdicts.json`: `{"<claim id>": {"supported": true or false, "note": "why"}}`, supported only if the cited items clearly say what the claim says. Rewrite or re-cite any unsupported claim and render again. The brief then marks verified claims, and an unattended send refuses unless every claim is supported.
 ```json
 {"headline": "Most important thing first, then what's next.", "quietWeek": false,
  "actions": [{"theme": "cards-declined", "action": "Review the new fraud rule thresholds", "owner": "Head of card fraud operations", "why": "Customers can't pay."}],
@@ -44,9 +46,9 @@ Run every command from the repository root. Write your files in the run folder t
 ```
 ```json
 {"meta": {"dateLabel": "...", "windowLabel": "..."}, "subject": "Weekly Feedback Brief: ...", "preheader": "One sentence.", "headline": "...",
- "actions": [{"theme": "cards-declined", "title": "Reduce false fraud declines", "detail": "One or two sentences.", "owner": "...",
-   "ticket": {"title": "False declines on everyday card purchases since Thursday", "body": "What is happening, the evidence, what to check first."}}],
- "themes": [{"id": "cards-declined", "title": "...", "summary": "...", "quotes": [{"item": "tickets-012", "text": "..."}]}],
+ "actions": [{"theme": "cards-declined", "title": "Reduce false fraud declines", "detail": "One or two sentences, each cited [tickets-012].", "owner": "...",
+   "ticket": {"title": "False declines on everyday card purchases since Thursday", "body": "What is happening [tickets-012, survey-087]. What to check first [tickets-031]."}}],
+ "themes": [{"id": "cards-declined", "title": "...", "summary": "Each sentence ends with its citations [tickets-012, tickets-019].", "quotes": [{"item": "tickets-012", "text": "..."}]}],
  "footer": "Anything the reader should know about the evidence: a blocked connection, a capped or partly covered window."}
 ```
 

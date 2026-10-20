@@ -73,14 +73,18 @@ The use case defines three kinds. You say what you use; **the agent writes the c
 
 Safety is designed into the use case, not left to the agent:
 
-- **Evidence:** every quote must appear word for word in collected feedback, and every theme shows its sources.
+- **Evidence:** every quote must appear word for word in collected feedback, and every sentence the agent writes cites the items it rests on; code checks each cited item exists and belongs to that theme, and the brief links every citation to the item.
+- **Interpretation is labelled:** quotes and numbers are marked as checked by code; summaries and actions are marked as the agent's interpretation, with the number of items they cite.
+- **Independent verification:** an unattended run only sends once a separate verifier, given just each claim and its cited items, confirms every claim is supported.
 - **Exact parts are code:** the model reads and judges; code counts every item and computes every number.
 - **Fixed reach:** feedback is read only through `collect.py`, from the connections in your locked user scope, which can never go beyond the use case scope. If a site refuses access, the run records it and never tries another way round.
 - **A send gate:** `send.py` reruns every check and emails only your approved recipient. Nothing in the project files tickets or posts anything.
 - **The rules can't be quietly changed:** setup commits your user scope once you confirm it, and you push it with your own access. The send gate refuses to send if the engine, the skill or your user scope differ from the shared repository, so a change only counts once someone with write access accepts it; the agent never pushes. In Claude Code, [`.claude/settings.json`](.claude/settings.json) also denies edits to the engine and asks you before any change to a user scope.
 - **Scheduled runs** carry only the run skill, never the setup skill, so an unattended agent has no instructions for changing its own reach. On Google Cloud it runs as its own least privilege service account, narrower than the person who set it up.
 
-**Limit:** the checks catch invented, misquoted, untagged or out of bounds output, not a weak judgement call.
+Every run also writes `out/metrics.json`: items tagged, quotes verified, sentences cited, claims verified, and how many problems the checks caught and the agent fixed.
+
+**Limit:** code proves a citation exists and belongs; whether it truly supports the claim is judged by the verifier and, finally, by the reader, one click away.
 
 ## The demo
 
