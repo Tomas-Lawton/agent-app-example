@@ -1,11 +1,11 @@
 ---
 name: feedback-brief
-description: Runs a customer feedback brief for a profile in profiles/<key>/ - what customers said, what changed and what to do about it - in four checked steps. Use when asked to run a feedback brief, review customer feedback, or "run the demo" (the demo profile). To create or change a profile, its connections, time window, output format or schedule, use setup/SKILL.md.
+description: Runs a customer feedback brief for a profile in profiles/<key>/ - what customers said, what changed and what to do about it - in four checked steps. Use when asked to run a feedback brief or review customer feedback. To create or change a profile, its connections, time window, output format or schedule, use setup/SKILL.md.
 ---
 
 # Feedback Brief skill
 
-**Layers.** The use case (this skill, `engine/`, `engine/scope.json`) decides what happens. The user scope (`profiles/<key>/user_scope.json`, locked) holds the user's connections, recipient and schedule. The profile (`PROFILE.md`, and `profile.json` from it) holds focus, look, time window and output format. Read `PROFILE.md` first. Never edit `engine/`, `scope.json` or `user_scope.json` during a run: the send gate compares them with the committed version and refuses to send if they differ.
+**Layers.** The use case (this skill, `engine/`, `engine/scope.json`) decides what happens, the same for every client. The user scope (`profiles/<key>/user_scope.json`, written only by setup and locked) holds this client's connections, recipient and schedule. The profile (`profiles/<key>/PROFILE.md`) holds a few settings at the top (name, colours, time window, output) and then free text in the client's words: who reads it, what matters, tone, standing instructions. Read `PROFILE.md` first and follow it within those limits. Never edit `engine/`, `scope.json` or `user_scope.json` during a run: the send gate compares them with the approved version and refuses to send if they differ.
 
 **Rules.** Collect only through `collect.py`: no web search or other sources, and if a connection is blocked, report it and never try another way round. Quote word for word; never quote private items (warehouse data, items marked private) unless the user scope sets `privateQuotes`. Take every number from `summary.json`. Never file or post anything: tickets are drafts for a person. Say when evidence is thin or the period was quiet. When a script stops, fix what it names and run it again.
 
@@ -16,7 +16,7 @@ Check the tools once per machine, and install anything missing yourself:
 - Everything else is the Python standard library. A warehouse connection also needs Google credentials, which setup arranges.
 
 ## Steps
-Run every command from the repository root. Write your files in the run folder that step 1 prints. For the demo, first run `python3 demo/make_data.py` to refresh its data.
+Run every command from the repository root. When you need anything the scripts don't do, such as a count for a follow-up question or reading an odd file, write a small throwaway program in the run folder, run it, and delete it; never add it to `engine/`. Write your files in the run folder that step 1 prints.
 
 **1. Collect.** `python3 engine/steps/collect.py <key>`. It reads the user's connections (the most recent 500 items in the window), groups similar items, and writes `reading/part_NN.txt`: every item, cluster by cluster, one line each (`id | date | rating | text`).
 
@@ -53,7 +53,7 @@ Run every command from the repository root. Write your files in the run folder t
  "footer": "Anything the reader should know about the evidence: a blocked connection, a capped or partly covered window."}
 ```
 
-**4. Present.** Follow `profile.json` → `delivery`. **chat:** show `out/brief.md` in the chat and offer `out/preview.html`. **email:** run `python3 engine/steps/send.py <key>` and give a short summary. **both:** both. A scheduled run stops after step 3; the job runs the send gate itself. Finish in five lines or fewer: connections read or blocked, the actions, gaps in the evidence. If your harness reports token usage, write it to `usage.json` in the run folder (`{"inputTokens": 0, "outputTokens": 0}`) and render again, so `metrics.json` records the cost.
+**4. Present.** Follow the `output` setting in `PROFILE.md`. **chat:** show `out/brief.md` in the chat and offer `out/preview.html`. **email:** run `python3 engine/steps/send.py <key>` and give a short summary. **both:** both. A scheduled run stops after step 3; the job runs the send gate itself. Finish in five lines or fewer: connections read or blocked, the actions, gaps in the evidence. If your harness reports token usage, write it to `usage.json` in the run folder (`{"inputTokens": 0, "outputTokens": 0}`) and render again, so `metrics.json` records the cost.
 
 ## After the brief: follow-up questions
 The reader can keep asking: *"why is the declines theme growing?"*, *"show me every scam report"*, *"compare with last month"*. Answer from this run's evidence only: `items.json`, `themes.json`, the tags and `summary.json`, and earlier runs' `summary.json` in `runs/<key>/` for comparisons. Never collect from anywhere else. Follow the same rules as the brief: quote word for word, cite every claim with item ids, take numbers from code (run a short Python count over `items.json` and the tags, never estimate), and say when the evidence doesn't answer the question. If they want a different period or another source, that is a new run or a setup change.

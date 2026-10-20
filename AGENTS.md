@@ -4,10 +4,10 @@
 
 ## Your first reply
 
-1. **Check for an existing profile:** any folder in `profiles/` other than `demo`.
+1. **Check for an existing profile:** any folder in `profiles/`.
 2. **If there is one,** offer in one line to run its brief or change it, then follow [SKILL.md](SKILL.md) or [setup/SKILL.md](setup/SKILL.md).
 3. **If there is none, go straight into setup.** Do not describe the project, list features or explain how it works. Write one line of context and the **first setup question only**, for example:
-   > *I'll set up your weekly customer feedback brief. First, what's your product or company, and who will read the brief? (Or say **demo** to see one for Capital Bank of Australia, a fictional bank.)*
+   > *I'll set up your weekly customer feedback brief. First, what's your product or company, and who will read the brief?*
 
    Then follow [setup/SKILL.md](setup/SKILL.md): ask **all six** setup questions, one per message, before building anything.
 
@@ -17,7 +17,7 @@ Only explain how the project works if the user asks.
 
 | The user wants | Follow |
 |---|---|
-| The demo, this week's brief, or a brief for an existing profile | [SKILL.md](SKILL.md) (the `demo` profile for the demo) |
+| This week's brief, or a brief for an existing profile | [SKILL.md](SKILL.md) |
 | Their own brief, or to change a profile, a connection, the recipient or a schedule | [setup/SKILL.md](setup/SKILL.md). When setup finishes, run their first brief with [SKILL.md](SKILL.md) straight away and open the preview |
 | To understand how it works or why it's safe | [README.md](README.md) |
 

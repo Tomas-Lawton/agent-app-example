@@ -3,7 +3,8 @@
   engine/scope.json               use case scope: what happens, the kinds of connection, the item shape, the limits
   profiles/<key>/user_scope.json  user scope: this user's connections, recipient, timezone and schedule. Set in
                                   setup, then locked. check() refuses anything outside the use case scope, every run.
-  profiles/<key>/profile.json     presentation: focus, look, wording and output format (from PROFILE.md)
+  profiles/<key>/PROFILE.md       the profile: a few settings at the top (name, colours, time window, output format),
+                                  then free text in the client's own words that the agent follows
 
 Settings are always rebuilt from these source files, never from the run folder, so a run can't widen its own reach.
 """
@@ -43,7 +44,31 @@ def _read(path):
     return json.load(open(path))
 
 
-def check(key, s, u, p):
+SETTINGS = {"product", "brief name", "reader", "time window", "output", "icon", "colours"}
+
+
+def profile(key):
+    """Read PROFILE.md: `key: value` settings between --- lines at the top, then free text for the agent.
+    Unknown settings are refused, so reach (connections, recipients, schedule) can never be set here."""
+    path = os.path.join(ROOT, "profiles", key, "PROFILE.md")
+    if not os.path.exists(path):
+        sys.exit(f"FAIL: profiles/{key}/PROFILE.md not found")
+    text = open(path, encoding="utf8").read()
+    head = text.split("---", 2)[1] if text.startswith("---") and text.count("---") >= 2 else ""
+    raw = {}
+    for line in head.splitlines():
+        if ":" in line and line.strip() and not line.lstrip().startswith("#"):
+            k, v = line.split(":", 1)
+            raw[k.strip().lower()] = v.strip()
+    colours = dict(part.split() for part in raw.get("colours", "").split(",") if len(part.split()) == 2)
+    window = raw.get("time window", "7").split()[0]
+    return raw, {"product": {"name": raw.get("product", key), "iconUrl": raw.get("icon") or None},
+                 "reader": raw.get("reader", ""), "windowDays": int(window) if window.isdigit() else 7,
+                 "delivery": raw.get("output", "chat").lower(), "wording": {"briefName": raw.get("brief name", "Customer Feedback Brief")},
+                 "theme": colours}
+
+
+def check(key, s, u, p, raw=None):
     """Problems with a user scope that is not inside the use case scope (empty = inside)."""
     out, types, shape = [], s["connectionTypes"], s["itemShape"]
     try:
@@ -93,20 +118,20 @@ def check(key, s, u, p):
             elif a and (a.get("type") not in svc["authTypes"] or not NAME.match(str(a.get("env", ""))) or set(a) - {"type", "env", "header", "param", "optional"}):
                 out.append(f"`{sid}` auth must name a key in .env (`env`) with a type of {', '.join(svc['authTypes'])}; never put the key itself here")
     if p.get("delivery", "chat") not in ("chat", "email", "both"):
-        out.append("profile.json `delivery` must be chat, email or both")
-    for f in ("sources", "recipients", "timezone", "privateQuotes", "schedule"):
-        if f in p:
-            out.append(f"profile.json sets `{f}`, which user_scope.json owns")
+        out.append("PROFILE.md `output` must be chat, email or both")
+    for f in sorted(set(raw or {}) - SETTINGS):
+        out.append(f"PROFILE.md sets `{f}`, which is not a profile setting (connections, recipients and schedule belong in user_scope.json)")
     return out
 
 
 def load(key):
     """Merged settings for a profile, after checking its user scope fits inside the use case scope."""
     pdir = os.path.join(ROOT, "profiles", key)
-    s, u, p = _read(os.path.join(ENGINE, "scope.json")), _read(os.path.join(pdir, "user_scope.json")), _read(os.path.join(pdir, "profile.json"))
-    problems = check(key, s, u, p)
+    s, u = _read(os.path.join(ENGINE, "scope.json")), _read(os.path.join(pdir, "user_scope.json"))
+    raw, p = profile(key)
+    problems = check(key, s, u, p, raw)
     if problems:
-        sys.exit(f"BLOCKED: profiles/{key}/user_scope.json is outside the use case scope:\n  " + "\n  ".join(problems)
+        sys.exit(f"BLOCKED: profiles/{key} is outside the use case scope:\n  " + "\n  ".join(problems)
                  + "\nOnly setup can change the user scope (setup/SKILL.md).")
     return dict(p, key=key, scope=s, userScope=u, sources=u["sources"], timezone=u["timezone"], recipient=u["recipients"][0],
                 windowDays=min(int(p.get("windowDays") or 7), s["collect"]["maxDays"]))
@@ -142,6 +167,7 @@ def open_run(key):
 
 def key_arg():
     if len(sys.argv) < 2:
-        keys = sorted(k for k in os.listdir(os.path.join(ROOT, "profiles")) if not k.startswith("_"))
+        pdir = os.path.join(ROOT, "profiles")
+        keys = sorted(k for k in os.listdir(pdir) if os.path.isdir(os.path.join(pdir, k)) and not k.startswith(("_", ".")))
         sys.exit(f"usage: python3 {os.path.relpath(sys.argv[0], ROOT)} <profile key>. Profiles: {', '.join(keys)}")
     return sys.argv[1]

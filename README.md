@@ -21,7 +21,7 @@ You get it **in the chat**, **by email**, or both, over the time window you choo
 ## How to use it
 
 1. **Download the project** and open the folder in your agent harness as its workspace.
-2. **Send any first message**, such as "hi". The agent explains what it does and starts setup. Say **demo** to see a brief for Capital Bank of Australia, a fictional bank, first.
+2. **Send any first message**, such as "hi". The agent explains what it does and starts setup.
 3. **Answer the setup questions,** in one short conversation:
    - **About you:** your product, who reads the brief, what matters most
    - **Connections:** what you use for feedback (Zendesk, Intercom, GitHub Issues, BigQuery, an export file…). The agent sets up each connection itself, shows you a sample, and keeps it only when you confirm
@@ -57,6 +57,51 @@ Each run is four steps. The agent does the judgement; a script ends each step, d
 
 The use case decides what happens; your user scope decides which data; your profile decides how it's shown. You can write anything in your profile and still can't give the agent a new connection, a new recipient or permission to post.
 
+### `SKILL.md` and `PROFILE.md`
+
+The two are deliberately separate: one use case, many clients.
+
+- **[`SKILL.md`](SKILL.md) is the use case.** It is the same for everyone: the four steps, the rules, the file formats and when to run each script. It tells the agent *how to produce a feedback brief*. Only the developer changes it, and the send gate refuses to send if it differs from the shared repository.
+- **`profiles/<key>/PROFILE.md` is the client.** It tells the agent *whose brief this is and what they care about*. A few settings sit at the top; everything below is plain text in the client's own words, which the agent follows when it reads, themes and writes:
+
+  ```
+  ---
+  product: Capital Bank of Australia
+  brief name: Customer Voice
+  reader: Head of Customer Experience
+  time window: 7
+  output: both
+  colours: brand #0b2545, brand2 #13315c, accent #c9a227, tint #eef2f8
+  ---
+  Our tagline is "Banking Built Around You". Lead with anything that blocks customers
+  from paying or getting into their account. Always surface scam reports, even single ones.
+  Keep it short: our reader skims on a phone.
+  ```
+
+  Only these settings exist (`product`, `brief name`, `reader`, `time window`, `output`, `icon`, `colours`); any other is refused. So you can change anything about the brief by editing one markdown file, or by asking the agent to, and still can't widen its reach.
+- **`profiles/<key>/user_scope.json` is the client's reach,** kept apart on purpose: connections, recipient, timezone and schedule. It is structured so code can check it against the use case scope every run, and only setup writes it, with the user's confirmation, before it is locked.
+
+The same split makes personalisation cheap. Ask *"use our new brand colours"* or *"focus on business customers this month"* and the agent edits the profile; the use case, and its checks, stay the same.
+
+## The engine scripts
+
+The scripts do the exact work and the checks; the agent does the judgement in between. Each one stops with what to fix if anything is wrong.
+
+| Script | What it does |
+|---|---|
+| [`steps/collect.py`](engine/steps/collect.py) | Starts the run. Reads every connection in the user scope through its reader, removes emails, phone numbers and reference numbers, drops duplicates, keeps the most recent 500 items with short ids such as `tickets-012`, then runs `cluster.py` |
+| [`steps/cluster.py`](engine/steps/cluster.py) | Groups similar items with K-means on word vectors, writes the reading parts the agent reads cluster by cluster, lays out the map, and carries over tags from the previous run |
+| [`steps/summarise.py`](engine/steps/summarise.py) | Checks every item is tagged and every quote is word for word, counts each theme exactly, and computes trends (first half against second half, and against the previous run) and scores |
+| [`steps/render.py`](engine/steps/render.py) | Checks the agent's plan and writing against the counts and citations, draws the map and header, and builds the chat brief, the preview, the email, the evidence list, the claims for the verifier and `metrics.json` |
+| [`steps/send.py`](engine/steps/send.py) | The send gate: reruns every check, refuses if the engine, skill or user scope differ from the shared repository, requires the verifier's verdicts on unattended runs, and emails only the approved recipient |
+| [`core/config.py`](engine/core/config.py) | Reads the three layers (use case scope, user scope, `PROFILE.md`) and refuses a user scope or profile that goes beyond the use case |
+| [`core/checks.py`](engine/core/checks.py) | Every check on the agent's files: items, themes, tags, plan, content and citations, logged to `checks_log.jsonl` |
+| [`readers/service.py`](engine/readers/service.py) | Reads any online service or feed: approved hosts only, read only, keys from `.env`, respects robots.txt, and stops if access is refused |
+| [`readers/bigquery.py`](engine/readers/bigquery.py) | Reads one named BigQuery table or view with a capped, parametrised query |
+| [`readers/csv_file.py`](engine/readers/csv_file.py) | Reads an export file inside the profile folder |
+
+**Throwaway code is fine.** Inside its own sandbox the agent can write and run any temporary code it needs on the fly: to inspect an unfamiliar API response while setting up a connection, to explore the data when you ask a follow up question, or to check an odd result. That code lives in the run folder, is deleted when done, and is never part of the use case. Only the scripts above collect feedback, decide what counts and send, so throwaway code can help the agent think but can't widen its reach or skip a check.
+
 ## Connections
 
 The use case defines three kinds. You say what you use; **the agent writes the connection for you**, from what it knows of the provider's API or its docs. There is no connector code to write or infrastructure to run, and every connection is tested with you before it's kept.
@@ -87,12 +132,6 @@ Every run also writes `out/metrics.json`: items tagged, quotes verified, sentenc
 **Cost:** scripts do all the predictable work (collecting, grouping, counting, checking, rendering) with no model tokens; items reach the model as compact lines; tags carry over from the previous run; and routine tagging and verification can run on a smaller, faster model. A harness costs more per run than a coded workflow but far less to build and change, which suits infrequent, high value, varied work like this brief.
 
 **Limit:** code proves a citation exists and belongs; whether it truly supports the claim is judged by the verifier and, finally, by the reader, one click away.
-
-## The demo
-
-The `demo` profile is **Capital Bank of Australia**, a fictional bank, with about 500 generated pieces of feedback from two different sources that tell one story (cards declined after a fraud rule change, lockouts after an app update, delayed transfers, unexpected fees, a handful of scam reports that must not be missed, and praise for the app):
-- **Support tickets** and **in-app survey comments**, as files, so the demo runs anywhere: run [`demo/make_data.py`](demo/make_data.py) to date them in the current week.
-- For a **live test with real connections**, the same data loads into a real **Zendesk** account ([`demo/load_zendesk.py`](demo/load_zendesk.py)) and a real **BigQuery** table ([`demo/load_warehouse.py`](demo/load_warehouse.py)), and setup connects to them like any company's systems.
 
 ## Scheduling on Google Cloud
 
@@ -130,8 +169,7 @@ engine/
   steps/             collect.py  cluster.py  summarise.py  render.py  send.py
   core/              config.py (layers and scope check)  checks.py (every check)
   readers/           service.py (any feed or API)  bigquery.py  csv_file.py
-profiles/demo/       the Capital Bank of Australia demo profile
-demo/                its data generator, and loaders that put the same data into Zendesk and BigQuery
+profiles/            one folder per client, created by setup (the public repository ships with none)
 ```
 
 Each run writes to `runs/<key>/<date>/` (not committed): the collected items, the clusters and reading parts, the agent's themes and tags, `summary.json`, and the brief and map in `out/`.

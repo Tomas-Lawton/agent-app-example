@@ -5,7 +5,7 @@ description: Sets up or changes a customer feedback brief in one short conversat
 
 # Feedback Brief setup skill
 
-Setup decides **what the agent does** (connections, recipient, schedule: the user scope, `profiles/<key>/user_scope.json`) and **how the brief is presented** (focus, look, output format: the profile, `PROFILE.md` and `profile.json`). It is the only time the user scope changes, and every change needs the user's confirmation. The user scope can only narrow the use case scope (`engine/scope.json`); `collect.py` refuses anything outside it.
+Setup decides **what the agent does** (connections, recipient, schedule: the user scope, `profiles/<key>/user_scope.json`) and **how the brief is presented** (focus, look, output format: the profile, `profiles/<key>/PROFILE.md`). It is the only time the user scope changes, and every change needs the user's confirmation. The user scope can only narrow the use case scope (`engine/scope.json`); `collect.py` refuses anything outside it.
 
 The user is not technical. Never ask them to run commands or edit files; install what's missing yourself (python3, then `python3 -m pip install -r requirements.txt` for the clustering and map); ask only for what you can't know.
 
@@ -23,8 +23,23 @@ The user is not technical. Never ask them to run commands or edit files; install
 The user names their tools; you work out the connection. Never offer write access or posting: every connection is read only. If a service can't be read within these rules, explain why and offer a file export.
 
 ## Then
-1. Create `profiles/<key>/` with three files, using the demo's as a template for their shape only: `mkdir profiles/<key> && cp profiles/demo/{PROFILE.md,profile.json,user_scope.json} profiles/<key>/`. Replace every value with the user's answers (never keep the demo's focus, names or connections). Write `PROFILE.md` in the user's words, and `profile.json`: `product` (`name`, and `iconUrl` for a logo image), `reader`, `focus`, `windowDays` (default 7), `delivery` (`chat`, `email` or `both`), `wording.briefName`, `theme` colours (`brand`, `brand2`, `accent`, `tint`).
-2. Fill in `user_scope.json`: `timezone`, one `recipients` address, `schedule` (`null` for on request), and each connection below. Test each one by running `python3 engine/steps/collect.py <key>` and showing the user a few items from `items.json`; keep it only when they confirm.
+1. Create `profiles/<key>/` (a short lowercase key, for example `capital-bank`) with two files, written from the user's answers:
+   - **`PROFILE.md`**, everything the user can change freely: a few settings at the top, then free text in their own words. Only these settings exist; anything else is refused:
+     ```
+     ---
+     product: Capital Bank of Australia
+     brief name: Weekly Customer Feedback Brief
+     reader: Priya Raman, General Manager, Customer Experience
+     time window: 7 days
+     output: chat            (chat, email or both)
+     colours: brand #0b2545, brand2 #13315c, accent #c9a227, tint #eef2f8
+     icon:                   (optional: a logo image address)
+     ---
+     **Who it's for.** ... **What matters.** ... **Tone.** ... **Standing instructions.** ...
+     ```
+     Write the free text in the user's words: who reads it, what matters, what is urgent, what to keep apart, how to route tickets, the tone. Never invent facts about the company.
+   - **`user_scope.json`**, what the brief may reach, which only setup writes (see the next step). It is a separate file on purpose: a profile can change how the brief looks, never what it can reach.
+2. Write `user_scope.json`: `{"timezone": "Australia/Sydney", "recipients": ["reader@company.com"], "sources": [...], "privateQuotes": false, "schedule": null}`, with each connection below in `sources`. Test each one by running `python3 engine/steps/collect.py <key>` and showing the user a few items from `items.json`; keep it only when they confirm.
 3. Set up email and the schedule if chosen (below), read back the connections, recipient and schedule, and ask the user to confirm. Then **lock** it: commit the profile (`git add profiles/<key> && git commit -m "Profile <key>: approved by the user"`) and ask the user to push it, or open a pull request, with their own access; the agent never pushes. The send gate compares the engine, the skill and the user scope with the shared repository and refuses to send if they differ, so a change only takes effect once a person with write access has accepted it. Without a shared repository, it checks against the local commit (run `git init` first if there is none).
 4. Run the first brief with [SKILL.md](../SKILL.md) and present it in the chosen format.
 
@@ -63,6 +78,6 @@ Record it in `user_scope.json` → `schedule`, for example `{"days": ["Mon"], "t
 **Elsewhere:** any scheduler that can start a headless harness on a machine with the project (cron, another cloud's job runner) works, following the same rules: the run skill only, a read only project except `runs/`, a least privilege identity, secrets outside the project.
 
 ## Changing things later
-- Focus, tone, look, output format: edit `PROFILE.md` and `profile.json`.
+- Focus, tone, look, output format: edit `PROFILE.md` (its settings at the top, or the free text).
 - A connection, the recipient or the schedule: a user scope change; follow the sections above, confirm with the user, and commit it again.
 - A new kind of connection, write access, looser limits, posting replies: a change to the use case itself, not setup.
