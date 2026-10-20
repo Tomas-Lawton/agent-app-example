@@ -91,7 +91,7 @@ def checked_quotes(theme):
 
 def check_quotes(errors, path, quotes, allowed_quotes):
     for j, quote in enumerate(quotes):
-        if (quote.get("item"), norm(quote.get("text"))) not in allowed_quotes:
+        if (quote.get("item"), norm(quote.get("text") or quote.get("quote"))) not in allowed_quotes:
             errors.append(f"`{path}.quotes[{j}]` is not one of the theme's checked quotes")
 
 

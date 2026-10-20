@@ -174,6 +174,8 @@ def source_problems(key, source, scope):
         fields = shape["required"] + shape["optional"]
         problems += [f"`{sid}` must map the `{f}` column" for f in shape["required"] if f not in columns]
         problems += [f"`{sid}` maps `{f}`, not a feedback field" for f in columns if f not in fields]
+        if "rating" in columns and not source.get("ratingScale"):
+            problems.append(f"`{sid}` maps a rating but no `ratingScale` (5 for stars, 10 for 0 to 10 scores)")
 
     if kind == "warehouse":
         for name in ("project", "dataset", "table"):

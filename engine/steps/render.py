@@ -11,6 +11,9 @@ errors = checks.run(cfg, info, "plan", "content")
 if errors:
     sys.exit("FIX brief_plan.json or live_content.json, then run render.py again:\n  " + "\n  ".join(errors))
 x = json.load(open("live_content.json"))
+for entry in (x.get("themes") or []) + (x.get("watch") or []):  # a quote's words may be under "text" or "quote"
+    for q in entry.get("quotes") or []:
+        q.setdefault("text", q.get("quote", ""))
 S = json.load(open("summary.json"))
 items = {i["id"]: i for i in json.load(open("items.json"))["items"]}
 conns = {c["id"]: c for c in S.get("connections", [])}
@@ -233,7 +236,7 @@ def section(title, sub=""):
 def stat(label, value, sub=""):
     return (
         f"<td class='stat' width='25%' style='padding:14px 8px;text-align:center'>"
-        f"<div style='{F}font-size:24px;font-weight:700;color:{INK}'>{e(value)}</div>"
+        f"<div style='{F}font-size:26px;font-weight:800;color:{BRAND}'>{e(value)}</div>"
         f"<div style='{F}font-size:11px;color:{MUTED};text-transform:uppercase;letter-spacing:.5px;margin-top:2px'>{e(label)}</div>"
         f"<div style='{F}font-size:11px;color:{MUTED};margin-top:2px'>{sub}</div></td>"
     )
