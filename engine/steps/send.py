@@ -3,7 +3,8 @@
 Usage (from the repository root):  python3 engine/steps/send.py <key> [--to address] [--dry-run]
 
 Before sending it (1) checks the recipient is the one in profiles/<key>/user_scope.json, (2) checks the engine, the
-skill and the user scope are exactly the approved, committed version, and (3) reruns every check on the run's files. Any failure stops the send; there is no other way to send. Drafts in the brief are never posted.
+skill and the user scope are exactly the approved version in the shared repository (the upstream branch, so a
+local commit can't launder a change), and (3) reruns every check on the run's files. Any failure stops the send; there is no other way to send. Drafts in the brief are never posted.
 
 Email settings come from a .env file in the repository root (never committed), written by setup:
   SMTP_HOST=smtp.gmail.com   SMTP_PORT=587   SMTP_USER=you@example.com   SMTP_PASSWORD=<app password>
@@ -30,11 +31,20 @@ if to not in cfg["userScope"]["recipients"][: cfg["scope"]["send"]["maxRecipient
 import shutil, subprocess  # noqa: E402
 guarded = ["engine", "SKILL.md", f"profiles/{a.key}/user_scope.json"]
 if os.path.isdir(os.path.join(config.ROOT, ".git")) and shutil.which("git"):
-    r = subprocess.run(["git", "status", "--porcelain", "--", *guarded], cwd=config.ROOT, capture_output=True, text=True)
-    changed = [line[3:] for line in r.stdout.splitlines() if not line[3:].endswith(".pyc") and "__pycache__" not in line]
-    if r.returncode or changed:
-        sys.exit("BLOCKED: these differ from the approved, committed version: " + ", ".join(changed or ["(git failed)"])
-                 + ". The engine and the user scope can only change through a reviewed commit, never during a run.")
+    git = lambda *args: subprocess.run(["git", *args], cwd=config.ROOT, capture_output=True, text=True)
+    upstream = git("rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}").stdout.strip()
+    if upstream:  # compare with the shared, reviewed repository: a local commit can't launder a change
+        git("fetch", "-q")
+        base = upstream
+    else:
+        base = "HEAD"
+        print("warning: no remote to compare with; checking against the local commit only")
+    changed = git("diff", "--name-only", base, "--", *guarded).stdout.split()
+    changed += [line[3:] for line in git("status", "--porcelain", "--", *guarded).stdout.splitlines()]
+    changed = sorted({c for c in changed if "__pycache__" not in c and not c.endswith(".pyc")})
+    if changed:
+        sys.exit(f"BLOCKED: these differ from the approved version in {base}: " + ", ".join(changed)
+                 + ". The engine and the user scope can only change through a reviewed change to the repository, never during a run.")
 else:
     print("warning: not a git checkout, so the engine and user scope can't be verified against an approved version")
 errors = checks.run(cfg, info, "items", "themes", "plan", "content")

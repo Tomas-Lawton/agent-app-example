@@ -77,7 +77,7 @@ Safety is designed into the use case, not left to the agent:
 - **Exact parts are code:** the model reads and judges; code counts every item and computes every number.
 - **Fixed reach:** feedback is read only through `collect.py`, from the connections in your locked user scope, which can never go beyond the use case scope. If a site refuses access, the run records it and never tries another way round.
 - **A send gate:** `send.py` reruns every check and emails only your approved recipient. Nothing in the project files tickets or posts anything.
-- **The rules can't be quietly changed:** setup commits your user scope once you confirm it, and the send gate refuses to send if the engine, the skill or your user scope differ from the committed version. In Claude Code, [`.claude/settings.json`](.claude/settings.json) also denies edits to the engine and asks you before any change to a user scope.
+- **The rules can't be quietly changed:** setup commits your user scope once you confirm it, and you push it with your own access. The send gate refuses to send if the engine, the skill or your user scope differ from the shared repository, so a change only counts once someone with write access accepts it; the agent never pushes. In Claude Code, [`.claude/settings.json`](.claude/settings.json) also denies edits to the engine and asks you before any change to a user scope.
 - **Scheduled runs** carry only the run skill, never the setup skill, so an unattended agent has no instructions for changing its own reach. On Google Cloud it runs as its own least privilege service account, narrower than the person who set it up.
 
 **Limit:** the checks catch invented, misquoted, untagged or out of bounds output, not a weak judgement call.
