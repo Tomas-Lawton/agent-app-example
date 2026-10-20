@@ -1,7 +1,8 @@
 import os, sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # engine/
-import importlib, json, re
+import datetime, importlib, json, re
+from zoneinfo import ZoneInfo
 from core import config, checks
 
 key = config.key_arg()
@@ -26,6 +27,20 @@ def reader(src):
     return importlib.import_module("readers.bigquery"), {"max_bytes": scope["collect"]["warehouseMaxBytesBilled"]}
 
 
+
+def local_date(value, timezone):
+    """The day an item was written, in the profile's timezone. Sources give dates or UTC timestamps; a ticket sent at
+    9am in Sydney is 11pm the day before in UTC, so the date is taken after converting."""
+    text = str(value or "").strip().replace("Z", "+00:00").replace(" UTC", "+00:00")
+    text = re.sub(r"([+-]\d\d)$", r"\1:00", text)  # BigQuery writes +00
+    try:
+        moment = datetime.datetime.fromisoformat(text)
+    except ValueError:
+        return text[:10]
+    if moment.tzinfo:
+        moment = moment.astimezone(ZoneInfo(timezone))
+    return moment.date().isoformat()
+
 log, items, seen, dupes = [], [], set(), 0
 for src in cfg["sources"]:
     t = src["type"]
@@ -37,8 +52,12 @@ for src in cfg["sources"]:
         got, meta = mod.fetch(src, info["since"], limit, timeout=scope["collect"]["timeoutSeconds"], **kw)
         kept = []
         for it in got:
+            day = local_date(it.get("date"), cfg["timezone"])
+            if not day or not info["since"] <= day <= info["until"]:
+                continue
             it = dict(
                 it,
+                date=day,
                 source=src["id"],
                 connection=t,
                 sourceLabel=entry["label"],
@@ -53,6 +72,8 @@ for src in cfg["sources"]:
             else:
                 dupes += bool(n)
         items += kept
+        if meta.get("coverageFrom"):
+            meta["coverageFrom"] = local_date(meta["coverageFrom"], cfg["timezone"])
         entry.update(status="ok", kept=len(kept), coverageFrom=meta.get("coverageFrom"))
         if hasattr(mod, "page"):
             entry["link"] = mod.page(src)

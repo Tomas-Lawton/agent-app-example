@@ -1,4 +1,4 @@
-import csv, os
+import csv, datetime, os
 
 
 def fetch(src, since, limit, profile_dir, timeout=None):
@@ -8,12 +8,13 @@ def fetch(src, since, limit, profile_dir, timeout=None):
     if not os.path.exists(path):
         raise FileNotFoundError(f"{os.path.relpath(path)} not found; export it again or ask setup to refresh it")
     cols = src.get("columns") or {}
+    day_before = (datetime.date.fromisoformat(since) - datetime.timedelta(days=1)).isoformat()
     c = lambda row, k: (row.get(cols.get(k, k)) or "").strip()
     items = []
     with open(path, newline="", encoding="utf8") as f:
         for n, row in enumerate(csv.DictReader(f)):
-            date, text = c(row, "date")[:10], c(row, "text")
-            if not text or not date or date < since:
+            date, text = c(row, "date"), c(row, "text")  # the full timestamp; collect.py makes it a local date
+            if not text or not date or date[:10] < day_before:
                 continue
             r = c(row, "rating")
             items.append(

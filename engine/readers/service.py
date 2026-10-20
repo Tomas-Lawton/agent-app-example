@@ -58,17 +58,21 @@ def _get(o, path):
     return o
 
 
+def day_before(since):
+    return (datetime.date.fromisoformat(since) - datetime.timedelta(days=1)).isoformat()
+
+
 def _date(v):
     if v in (None, ""):
         return ""
     if isinstance(v, (int, float)) or str(v).isdigit():
         n = float(v) / (1000 if float(v) > 1e11 else 1)
-        return datetime.datetime.fromtimestamp(n, datetime.timezone.utc).date().isoformat()
+        return datetime.datetime.fromtimestamp(n, datetime.timezone.utc).isoformat()
     v = str(v).strip()
     if v[:4].isdigit():
-        return v[:10]
+        return v  # the full timestamp; collect.py turns it into a date in the profile's timezone
     try:
-        return email.utils.parsedate_to_datetime(v).date().isoformat()
+        return email.utils.parsedate_to_datetime(v).isoformat()
     except Exception:
         return ""
 
@@ -178,7 +182,7 @@ def fetch(src, since, limit, timeout=30, max_pages=20):
             if not date or not text:
                 continue  # not a piece of feedback (a feed header, an empty post)
             oldest = min(oldest or date, date)
-            if date < since:
+            if date[:10] < day_before(since):
                 continue
             fresh += 1
             r = _get(e, cols["rating"]) if "rating" in cols else None

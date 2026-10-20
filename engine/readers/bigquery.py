@@ -66,10 +66,10 @@ def build_sql(src, limit):
             raise ValueError(f"warehouse column name {c!r} is not a plain identifier")
     day = f"SAFE_CAST(SUBSTR(CAST(`{cols['date']}` AS STRING), 1, 10) AS DATE)"
     sel = [f"CAST(`{cols[k]}` AS STRING) AS `{k}`" for k in FIELDS if k in cols and k != "date"]
-    sel.append(f"CAST({day} AS STRING) AS `date`")
+    sel.append(f"CAST(`{cols['date']}` AS STRING) AS `date`")  # the full timestamp; collect.py makes it a local date
     return (
         f"SELECT {', '.join(sel)} FROM `{src['project']}.{src['dataset']}.{src['table']}` "
-        f"WHERE {day} >= @since ORDER BY {day} DESC LIMIT {int(limit)}"
+        f"WHERE {day} >= DATE_SUB(@since, INTERVAL 1 DAY) ORDER BY `{cols['date']}` DESC LIMIT {int(limit)}"
     )
 
 
