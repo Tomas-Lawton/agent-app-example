@@ -115,6 +115,16 @@ def pill(text, colour, solid=False):
     )
 
 
+def agent_link():
+    """Where the reader continues: this conversation's own link if the agent has it, else the profile's agent link."""
+    session = x.get("session") or {}
+    if session.get("url"):
+        return session["url"], "Continue in your agent"
+    if cfg.get("agentLink"):
+        return cfg["agentLink"], "Open your agent"
+    return None
+
+
 def link_button(href, label):
     """A plain link styled as a button: works in every email client, unlike scripts."""
     blank = " target='_blank' rel='noopener'" if href.startswith("https://") else ""
@@ -501,8 +511,8 @@ def body(preview, img):
                 f"{base.rstrip('/')}/{info['folder'].split('runs/', 1)[-1]}/out/preview.html",
                 "Open the interactive version",
             )
-        if ss.get("url"):
-            links += link_button(ss["url"], "Continue in your agent")
+        if agent_link():
+            links += link_button(*agent_link())
         if links:
             rows.append(f"<tr><td style='padding:14px 24px 0'>{links}</td></tr>")
     chips = []
@@ -644,8 +654,8 @@ def body(preview, img):
     qs = "".join(f"<li style='margin:2px 0'>&ldquo;{e(q)}&rdquo;</li>" for q in x.get("questions") or [])
     ss = x.get("session") or {}
     back = (
-        link_button(ss["url"], "Continue in your agent")
-        if ss.get("url")
+        link_button(*agent_link())
+        if agent_link()
         else (
             f"<div style='{F}font-size:13px;color:{INK};margin-top:8px'>To continue this conversation, run in the project folder: "
             f"<code style='background:{BG};padding:2px 6px;border-radius:4px'>{e(ss['resume'])}</code></div>"

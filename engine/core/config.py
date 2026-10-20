@@ -10,7 +10,7 @@ ENGINE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ROOT = os.path.dirname(ENGINE)
 
 PLAIN_NAME = re.compile(r"^[A-Za-z0-9_-]+$")
-PROFILE_SETTINGS = {"product", "brief name", "reader", "time window", "output", "icon", "colours", "tickets"}
+PROFILE_SETTINGS = {"product", "brief name", "reader", "time window", "output", "icon", "colours", "tickets", "agent link"}
 TRACKERS = ("github", "linear", "jira")
 OUTPUTS = ("chat", "email", "both")
 
@@ -85,6 +85,7 @@ def profile(key):
         "wording": {"briefName": raw.get("brief name", "Customer Feedback Brief")},
         "theme": colours,
         "tickets": raw.get("tickets", "").split(),
+        "agentLink": raw.get("agent link") or None,
     }
     return raw, settings
 
@@ -102,6 +103,8 @@ def profile_problems(settings, raw):
                 "PROFILE.md `tickets` must be `github owner/repo`, `linear TEAM` "
                 "or `jira https://site.atlassian.net <project id>`"
             )
+    if settings["agentLink"] and not settings["agentLink"].startswith("https://"):
+        problems.append("PROFILE.md `agent link` must be an https address")
     for name in sorted(set(raw) - PROFILE_SETTINGS):
         problems.append(
             f"PROFILE.md sets `{name}`, which is not a profile setting "
