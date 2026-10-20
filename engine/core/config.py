@@ -172,6 +172,6 @@ def open_run(key):
 def key_arg():
     if len(sys.argv) < 2:
         pdir = os.path.join(ROOT, "profiles")
-        keys = sorted(k for k in os.listdir(pdir) if os.path.isdir(os.path.join(pdir, k)) and not k.startswith(("_", ".")))
-        sys.exit(f"usage: python3 {os.path.relpath(sys.argv[0], ROOT)} <profile key>. Profiles: {', '.join(keys)}")
+        keys = sorted(k for k in os.listdir(pdir) if os.path.isdir(os.path.join(pdir, k)) and not k.startswith(("_", "."))) if os.path.isdir(pdir) else []
+        sys.exit(f"usage: python3 {os.path.relpath(sys.argv[0], ROOT)} <profile key>. Profiles: {', '.join(keys) or 'none yet (setup creates one)'}")
     return sys.argv[1]

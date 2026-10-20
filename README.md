@@ -23,7 +23,7 @@ You get it **in the chat**, **by email**, or both, over the time window you choo
 ## How to use it
 
 1. **Download the project** and open the folder in your agent harness as its workspace.
-2. **Send any first message**, such as "hi". The agent explains what it does and starts setup.
+2. **Send any first message**, such as "hi". The agent explains what it does and starts setup. Most harnesses read [`AGENTS.md`](AGENTS.md) automatically; if yours doesn't (for example Claude Code or Gemini CLI), say "read AGENTS.md" first.
 3. **Answer the setup questions,** in one short conversation:
    - **About you:** your product, who reads the brief, what matters most
    - **Connections:** what you use for feedback (Zendesk, Intercom, GitHub Issues, BigQuery, an export file…). The agent sets up each connection itself, shows you a sample, and keeps it only when you confirm
@@ -64,7 +64,7 @@ The use case decides what happens; your user scope decides which data; your prof
 
 The two are deliberately separate: one use case, many clients.
 
-- **[`SKILL.md`](SKILL.md) is the use case.** It is the same for everyone: the four steps, the rules, the file formats and when to run each script. It tells the agent *how to produce a feedback brief*. Only the developer changes it; in Claude Code the agent is denied edits to it.
+- **[`SKILL.md`](SKILL.md) is the use case.** It is the same for everyone: the four steps, the rules, the file formats and when to run each script. It tells the agent *how to produce a feedback brief*. Only the developer changes it.
 - **`profiles/<key>/PROFILE.md` is the client.** It tells the agent *whose brief this is and what they care about*. A few settings sit at the top; everything below is plain text in the client's own words, which the agent follows when it reads, themes and writes:
 
   ```
@@ -128,7 +128,7 @@ Safety is designed into the use case, not left to the agent:
 - **Exact parts are code:** the model reads and judges; code counts every item and computes every number.
 - **Fixed reach:** feedback is read only through `collect.py`, from the connections in your user scope, which can never go beyond the use case scope. If a site refuses access, the run records it and never tries another way round.
 - **A send gate:** `send.py` reruns every check and emails only your approved recipient. Nothing in the project files tickets or posts anything.
-- **Reach changes only through setup:** only setup writes your user scope, and only with your confirmation; every run checks it against the use case scope and refuses anything outside it. In Claude Code, [`.claude/settings.json`](.claude/settings.json) also denies edits to the engine and the skill, and asks you before any change to a user scope. The strongest lock is the scheduled run: a container built from the project, read only except for `runs/`, with no setup skill at all.
+- **Reach changes only through setup:** only setup writes your user scope, and only with your confirmation; every run checks it against the use case scope and refuses anything outside it. The strongest lock is the scheduled run: a container built from the project, read only except for `runs/`, with no setup skill at all.
 - **Scheduled runs** carry only the run skill, never the setup skill, so an unattended agent has no instructions for changing its own reach. On Google Cloud it runs as its own least privilege service account, narrower than the person who set it up.
 
 Every run also writes `out/metrics.json`: items tagged, quotes verified, sentences cited, claims verified, how many problems the checks caught and the agent fixed, run time, and tokens when the harness reports them.
@@ -163,7 +163,6 @@ A BigQuery connection uses Google application default credentials, or the identi
 
 ```
 AGENTS.md            what the agent does on your first message
-.claude/settings.json  harness permissions: no edits to the engine, ask before changing a user scope
 SKILL.md             the use case: four steps, rules and file formats
 setup/SKILL.md       the setup conversation, and deploying a scheduled run
 Dockerfile           the scheduled run's container
