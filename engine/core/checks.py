@@ -90,7 +90,10 @@ def themes(cfg, info):
         else:
             continue
         ev = t.get("evidence") or []
-        need = 1 if t.get("decision") == "watch" else lim["minEvidence"]
+        # quotes can only come from items the brief may quote: private items need privateQuotes in the user scope.
+        # A theme built only from private feedback is described and cited, not quoted.
+        quotable = [i for i in (c.get("items") or []) if not (by_id.get(i) or {}).get("private") or cfg["userScope"].get("privateQuotes")]
+        need = min(1 if t.get("decision") == "watch" else lim["minEvidence"], len(quotable))
         if len(ev) < need: err.append(f"`{p}` needs at least {need} quote{'s' if need > 1 else ''}")
         for j, e in enumerate(ev):
             it = by_id.get(e.get("item"))
@@ -151,7 +154,7 @@ def content(cfg, info):
         _text(err, f"watch[{k}].title", w.get("title"))
         _cited(err, f"watch[{k}].why", w.get("why"), set(t.get("computed", {}).get("items") or []), by_id)
         ev = {(e.get("item"), norm(e.get("quote"))) for e in t.get("evidence") or []}
-        if not 1 <= len(w.get("quotes") or []) <= 2: err.append(f"`watch[{k}]` shows 1 or 2 quotes")
+        if not min(1, len(ev)) <= len(w.get("quotes") or []) <= 2: err.append(f"`watch[{k}]` shows 1 or 2 quotes (none only if it has no quotable items)")
         for j, q in enumerate(w.get("quotes") or []):
             if (q.get("item"), norm(q.get("text"))) not in ev: err.append(f"`watch[{k}].quotes[{j}]` is not one of the theme's checked quotes")
     for k, t in enumerate(x.get("themes") or []):
@@ -168,7 +171,7 @@ def content(cfg, info):
     for k, t in enumerate(x.get("themes") or []):
         ev = {(e.get("item"), norm(e.get("quote"))) for e in (kept.get(t.get("id")) or {}).get("evidence") or []}
         want = min(lim["maxQuotesPerTheme"], len(ev))
-        if not max(1, want) <= len(t.get("quotes") or []) <= lim["maxQuotesPerTheme"]:
+        if not want <= len(t.get("quotes") or []) <= lim["maxQuotesPerTheme"]:
             err.append(f"`themes[{k}]` shows {want} quotes (it has {len(ev)} checked quotes; the most shown is {lim['maxQuotesPerTheme']})")
         cited = set(citations(t.get("summary")))
         for q in t.get("quotes") or []:

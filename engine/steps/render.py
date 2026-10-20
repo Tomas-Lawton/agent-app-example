@@ -276,6 +276,10 @@ def ratings_chart():
             f"<table role='presentation' width='100%' cellpadding='0' cellspacing='0'>{rows}</table>")
 
 
+PRIVATE_NOTE = (f"<div style='{F}font-size:12px;color:{MUTED};margin-top:10px;font-style:italic'>No quotes: this feedback is private, "
+                "so it is described and cited but not quoted (setup can allow quoting for a brief that stays inside the company).</div>")
+
+
 def day(d):
     d = datetime.date.fromisoformat(d)
     return f"{d:%a} {d.day} {d:%b}"
@@ -357,7 +361,7 @@ def body(preview, img):
             f"<div style='{F}font-size:14px;line-height:1.55;color:{INK};margin-top:8px'>{cite(th['summary'])}</div>"
             + when(s) + who
             + label("interpretation", f"theme {th['id']}", len(set(checks.citations(th['summary'])) | set(checks.citations(th.get('who')))))
-            + "".join(quote(q) for q in th["quotes"])
+            + ("".join(quote(q) for q in th["quotes"]) or PRIVATE_NOTE)
             + f"<div style='{F}font-size:12px;color:{MUTED};margin-top:10px'>From {srcs}</div>",
             accent=KIND.get(s["kind"], BRAND))
 
