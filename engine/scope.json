@@ -1,11 +1,11 @@
 {
-  "_about": "The use case scope: what a customer feedback brief is, the general kinds of connection it supports, the shape every connection must deliver, and the most it may ever do. Same for every user. During setup, each user's specific connections are recorded in profiles/<key>/user_scope.json, which can only narrow this file, never widen it. Change only by a deliberate design decision.",
-  "useCase": "Customer feedback brief: what customers said, what changed and what to do about it, for one reader, from the connections that reader approved, over the time window they chose.",
+  "_about": "The use case scope: what a Customer Pulse is, the general kinds of connection it supports, the shape every connection must deliver, and the most it may ever do. Same for every user. During setup, each user's specific connections are recorded in profiles/<key>/user_scope.json, which can only narrow this file, never widen it. Change only by a deliberate design decision.",
+  "useCase": "Customer Pulse: what customers said, what changed and what to do about it, for one reader, from the connections that reader approved, over the time window they chose.",
   "allowedActions": [
     "read the connections in the user scope, through engine/steps/collect.py only",
     "write files inside the run folder",
     "draft tickets for the team to file (never file them)",
-    "email the brief to the recipient in the user scope, through engine/steps/send.py, after every check passes"
+    "email the pulse to the recipient in the user scope, through engine/steps/send.py, after every check passes"
   ],
   "itemShape": {
     "_about": "Every connection delivers feedback items in this shape, so every step after collection is the same for every user. A user scope maps its own column names onto these fields.",

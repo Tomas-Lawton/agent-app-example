@@ -113,7 +113,7 @@ def items(cfg, info):
 
 
 def check_evidence(errors, path, theme, cfg, by_id):
-    """Quotes must be word for word, from tagged items the brief may quote (private items need privateQuotes).
+    """Quotes must be word for word, from tagged items the pulse may quote (private items need privateQuotes).
     A theme built only from private feedback is described and cited, not quoted."""
     limits = cfg["scope"]["themes"]
     private_ok = cfg["userScope"].get("privateQuotes", True)
@@ -186,18 +186,18 @@ def themes(cfg, info):
     return errors
 
 
-# ---------------------------------------------------------------- brief_plan.json
+# ---------------------------------------------------------------- plan.json
 
 
 def plan(cfg, info):
     errors, limits, kept, watched = [], cfg["scope"]["themes"], themes_with("keep"), themes_with("watch")
-    brief_plan = load("brief_plan.json")
-    if not brief_plan:
-        return ["brief_plan.json not found"]
-    check_text(errors, "headline", brief_plan.get("headline"))
+    plan = load("plan.json")
+    if not plan:
+        return ["plan.json not found"]
+    check_text(errors, "headline", plan.get("headline"))
 
-    actions, shown = brief_plan.get("actions") or [], brief_plan.get("themes") or []
-    if not brief_plan.get("quietWeek") and not 1 <= len(actions) <= 3:
+    actions, shown = plan.get("actions") or [], plan.get("themes") or []
+    if not plan.get("quietWeek") and not 1 <= len(actions) <= 3:
         errors.append("`actions` needs one to three items (or quietWeek: true)")
     for k, action in enumerate(actions):
         theme = kept.get(action.get("theme"))
@@ -216,7 +216,7 @@ def plan(cfg, info):
     praise = [tid for tid, theme in kept.items() if theme.get("kind") == "praise"]
     if praise and not any(tid in praise for tid in shown):
         errors.append(f"`themes` must include at least one praise theme for \"What's working\": {', '.join(praise)}")
-    if sorted(brief_plan.get("watch") or []) != sorted(watched):
+    if sorted(plan.get("watch") or []) != sorted(watched):
         errors.append(f"`watch` must list every watched theme: {', '.join(sorted(watched)) or 'none'}")
     return errors
 
@@ -236,7 +236,7 @@ def check_extras(errors, content):
 
     questions = content.get("questions") or []
     if not 2 <= len(questions) <= 3:
-        errors.append("`questions` needs 2 or 3 follow-up questions the reader could ask about this brief")
+        errors.append("`questions` needs 2 or 3 follow-up questions the reader could ask about this pulse")
     for k, question in enumerate(questions):
         check_text(errors, f"questions[{k}]", question)
         if isinstance(question, str) and not question.strip().endswith("?"):
@@ -351,8 +351,8 @@ def content(cfg, info):
     live = load("live_content.json")
     if not live:
         return ["live_content.json not found"]
-    brief_plan, kept, watched, by_id = (
-        load("brief_plan.json") or {},
+    plan, kept, watched, by_id = (
+        load("plan.json") or {},
         themes_with("keep"),
         themes_with("watch"),
         items_by_id(),
@@ -367,11 +367,11 @@ def content(cfg, info):
         check_text(errors, field, live.get(field))
     check_extras(errors, live)
 
-    if [a.get("theme") for a in live.get("actions") or []] != [a.get("theme") for a in brief_plan.get("actions") or []]:
+    if [a.get("theme") for a in live.get("actions") or []] != [a.get("theme") for a in plan.get("actions") or []]:
         errors.append("`actions` must follow the plan")
-    if [t.get("id") for t in live.get("themes") or []] != brief_plan.get("themes"):
+    if [t.get("id") for t in live.get("themes") or []] != plan.get("themes"):
         errors.append("`themes` must be the plan's themes, in order")
-    if [w.get("id") for w in live.get("watch") or []] != (brief_plan.get("watch") or []):
+    if [w.get("id") for w in live.get("watch") or []] != (plan.get("watch") or []):
         errors.append("`watch` must be the plan's watched themes, in order")
 
     check_watchlist(errors, live, watched, by_id)

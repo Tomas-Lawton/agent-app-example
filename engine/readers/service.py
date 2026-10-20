@@ -2,7 +2,7 @@ import base64, datetime, email.utils, html, json, re, urllib.error, urllib.parse
 import xml.etree.ElementTree as ET
 from core.config import Blocked, NotAllowed, env
 
-UA = "feedback-brief-agent/1.0 (reads customer feedback the user approved)"
+UA = "customer-pulse-agent/1.0 (reads customer feedback the user approved)"
 CAPTCHA = re.compile(r"captcha|are you a robot|verify you are human|access denied", re.I)
 
 

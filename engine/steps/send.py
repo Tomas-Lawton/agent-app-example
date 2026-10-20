@@ -21,14 +21,14 @@ if to not in cfg["userScope"]["recipients"][: cfg["scope"]["send"]["maxRecipient
     )
 errors = checks.run(cfg, info, "items", "themes", "plan", "content")
 # unattended runs need every cited claim confirmed by the independent verifier (SKILL.md, step 3)
-if os.environ.get("BRIEF_UNATTENDED") == "1":
+if os.environ.get("PULSE_UNATTENDED") == "1":
     claims = json.load(open("out/claims.json")) if os.path.exists("out/claims.json") else []
     verdicts = json.load(open("verdicts.json")) if os.path.exists("verdicts.json") else {}
     unverified = [c["id"] for c in claims if not verdicts.get(c["id"], {}).get("supported")]
     if not claims or unverified:
         errors.append(
             f"verify: {len(unverified) or 'all'} cited claims are not confirmed by the verifier (verdicts.json); "
-            "an unattended brief is only sent when every claim is supported by the items it cites"
+            "an unattended pulse is only sent when every claim is supported by the items it cites"
         )
 if errors or not os.path.exists("out/email.eml"):
     sys.exit("BLOCKED: checks failed:\n  " + "\n  ".join(errors or ["out/email.eml not found; run render.py first"]))
@@ -43,7 +43,7 @@ port, sender = int(get("SMTP_PORT", "587")), get("SMTP_FROM", user)
 m = email.message_from_bytes(open("out/email.eml", "rb").read(), policy=policy.default)
 del m["From"]
 del m["To"]
-m["From"] = formataddr((cfg.get("wording", {}).get("briefName", "Feedback Brief"), sender))
+m["From"] = formataddr((cfg.get("wording", {}).get("title", "Customer Pulse"), sender))
 m["To"] = to
 if a.dry_run:
     sys.exit(f"dry run: would send \"{m['Subject']}\" from {sender} to {to} via {host}:{port}")

@@ -10,7 +10,7 @@ ENGINE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ROOT = os.path.dirname(ENGINE)
 
 PLAIN_NAME = re.compile(r"^[A-Za-z0-9_-]+$")
-PROFILE_SETTINGS = {"product", "brief name", "reader", "time window", "output", "icon", "colours", "tickets", "agent link"}
+PROFILE_SETTINGS = {"product", "title", "reader", "time window", "output", "icon", "colours", "tickets", "agent link"}
 TRACKERS = ("github", "linear", "jira")
 OUTPUTS = ("chat", "email", "both")
 
@@ -82,7 +82,7 @@ def profile(key):
         "reader": raw.get("reader", ""),
         "windowDays": int(window) if window.isdigit() else 7,
         "delivery": (raw.get("output") or "both").lower(),
-        "wording": {"briefName": raw.get("brief name", "Customer Feedback Brief")},
+        "wording": {"title": raw.get("title", "Customer Pulse")},
         "theme": colours,
         "tickets": raw.get("tickets", "").split(),
         "agentLink": raw.get("agent link") or None,

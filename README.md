@@ -1,10 +1,10 @@
 <div align="center">
 
-# Feedback Brief Agent
+# Customer Pulse
 
-**A weekly customer feedback brief, run entirely by the AI agent you already use.**
+**A weekly pulse on what your customers are saying, run entirely by the AI agent you already use.**
 
-An example of an *agent as an application*: no app to deploy, just skills, a few small scripts, and checks every brief must pass.
+An example of an *agent as an application*: no app to deploy, just skills, a few small scripts, and checks every pulse must pass.
 
 </div>
 
@@ -19,7 +19,7 @@ In any agent harness (Antigravity, Gemini CLI, Claude Code, Codex…), say:
 Clone https://github.com/Tomas-Lawton/agent-app-example, open it, and use the setup skill in setup/SKILL.md.
 ```
 
-The [setup skill](setup/SKILL.md) asks a few questions, connects your feedback sources, then runs and sends your first brief. After that, just ask: *"why is the top theme growing?"*, *"make it shorter"*, *"add our survey export"*.
+The [setup skill](setup/SKILL.md) asks a few questions, connects your feedback sources, then runs and sends your first pulse. After that, just ask: *"why is the top theme growing?"*, *"make it shorter"*, *"add our survey export"*.
 
 ## What you get
 
@@ -83,14 +83,14 @@ flowchart LR
 |---|---|---|
 | **1. Collect** | | Read your connections, remove personal details, keep the newest 500 items, group similar ones |
 | **2. Theme and tag** | Reads every item, writes the themes, tags every item | Check every item is tagged, count each theme, compute trends |
-| **3. Write** | Picks the actions, writes the brief with citations | Check every quote, number and citation; build the brief and email |
-| **4. Send** | Presents the brief, answers follow-ups | Rerun every check; email only your approved recipient |
+| **3. Write** | Picks the actions, writes the pulse with citations | Check every quote, number and citation; build the pulse and email |
+| **4. Send** | Presents the pulse, answers follow-ups | Rerun every check; email only your approved recipient |
 
 ### The use case and the client
 
 | File | Is | Changed by |
 |---|---|---|
-| [`SKILL.md`](SKILL.md) | **The use case**: how to produce a feedback brief, the same for everyone | The developer |
+| [`SKILL.md`](SKILL.md) | **The use case**: how to produce a Customer Pulse, the same for everyone | The developer |
 | `profiles/<key>/PROFILE.md` | **The client**: a few settings, then plain text in their own words | You, any time |
 | `profiles/<key>/user_scope.json` | **The client's reach**: connections, recipient, schedule | Setup only, with your confirmation |
 
@@ -100,7 +100,7 @@ flowchart LR
 ```yaml
 ---
 product: Capital Bank of Australia
-brief name: Customer Voice
+title: Customer Voice
 reader: Head of Customer Experience
 time window: 7
 output: both
@@ -122,7 +122,7 @@ Optional images (`logo.png`, `header.png`) go in `profiles/<key>/assets/`.
 | [`steps/collect.py`](engine/steps/collect.py) | Reads every connection, removes personal details and duplicates, keeps the newest 500 items |
 | [`steps/cluster.py`](engine/steps/cluster.py) | Groups similar items for reading and lays out the map |
 | [`steps/summarise.py`](engine/steps/summarise.py) | Checks tagging and quotes, counts themes, computes trends |
-| [`steps/render.py`](engine/steps/render.py) | Checks the writing and builds the brief, preview, email and charts |
+| [`steps/render.py`](engine/steps/render.py) | Checks the writing and builds the pulse, preview, email and charts |
 | [`steps/send.py`](engine/steps/send.py) | The send gate: reruns every check and emails only the approved recipient |
 | [`core/config.py`](engine/core/config.py) | Reads the scope and profile; refuses anything beyond the use case |
 | [`core/checks.py`](engine/core/checks.py) | Every check on the agent's files |

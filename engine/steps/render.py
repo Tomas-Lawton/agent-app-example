@@ -9,7 +9,7 @@ from core import config, checks
 cfg, info = config.open_run(config.key_arg())
 errors = checks.run(cfg, info, "plan", "content")
 if errors:
-    sys.exit("FIX brief_plan.json or live_content.json, then run render.py again:\n  " + "\n  ".join(errors))
+    sys.exit("FIX plan.json or live_content.json, then run render.py again:\n  " + "\n  ".join(errors))
 x = json.load(open("live_content.json"))
 for a in x.get("actions") or []:  # a ticket is a title, the issue, and the items it rests on (listed at the end)
     tk = a.get("ticket") or {}
@@ -44,7 +44,7 @@ TREND = {
     "rising": ("Rising this period", ACCENT),
     "easing": ("Easing", "#15803d"),
 }
-NAME = cfg.get("wording", {}).get("briefName", "Customer feedback brief")
+NAME = cfg.get("wording", {}).get("title", "Customer Pulse")
 PRODUCT = cfg.get("product", {})
 F = "font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Arial,Helvetica,sans-serif;"  # no quotes: styles sit in single quoted attributes
 e = lambda s: html.escape(str(s if s is not None else ""))
@@ -54,7 +54,7 @@ THEME_COLOUR = {
     th["id"]: PALETTE[n % len(PALETTE)] for n, th in enumerate(x["themes"])
 }  # the same colour and number on every chart
 kept_themes = {t["id"]: t for t in json.load(open("themes.json"))["themes"] if t.get("decision") == "keep"}
-CITED = []  # item ids in order of first citation, numbered [1], [2] ... across the brief
+CITED = []  # item ids in order of first citation, numbered [1], [2] ... across the pulse
 
 
 def claims():
@@ -346,7 +346,7 @@ def ticket_text(tk):
     return "\n".join(lines)
 
 
-# ---------------------------------------------------------------- the brief
+# ---------------------------------------------------------------- the pulse
 def sources_chart():
     """Items from each connection: where this period's feedback came from."""
     conns = [c for c in S.get("connections", []) if c.get("status") == "ok"]
@@ -447,7 +447,7 @@ def ratings_chart():
 
 PRIVATE_NOTE = (
     f"<div style='{F}font-size:12px;color:{MUTED};margin-top:10px;font-style:italic'>No quotes: this feedback is private, "
-    "so it is described and cited but not quoted (setup can allow quoting for a brief that stays inside the company).</div>"
+    "so it is described and cited but not quoted (setup can allow quoting for a pulse that stays inside the company).</div>"
 )
 
 
@@ -530,7 +530,7 @@ def body(preview, img):
         + "</tr></table></td></tr>",
     ]
     if not preview:  # an email can't run scripts: link to the interactive versions, when there are real ones
-        ss, base = x.get("session") or {}, config.env("BRIEF_PREVIEW_BASE")
+        ss, base = x.get("session") or {}, config.env("PULSE_PREVIEW_BASE")
         links = ""
         if base:  # a scheduled run's hosted preview (Cloud Storage, behind sign-in)
             links += link_button(
@@ -690,11 +690,11 @@ def body(preview, img):
         )
     )
     how = (
-        "Ask the agent directly, in the conversation where this brief was made. It answers from this brief's evidence, "
+        "Ask the agent directly, in the conversation where this pulse was made. It answers from this pulse's evidence, "
         "with every claim cited. For example:"
         if preview
         else (
-            "Follow-up questions can't be answered by email yet. Continue in your agent, where this brief was made, for example:"
+            "Follow-up questions can't be answered by email yet. Continue in your agent, where this pulse was made, for example:"
             if back
             else "Follow-up questions can't be answered by email yet. Open the project in your agent harness and ask there, for example:"
         )
@@ -704,7 +704,7 @@ def body(preview, img):
         card(
             f"<div style='{F}font-size:14px;line-height:1.6;color:{INK}'>{how}"
             f"<ul style='margin:6px 0 0 18px;padding:0'>{qs}</ul>{back}"
-            f"<div style='{F}font-size:12px;color:{MUTED};margin-top:8px'>You can also ask it to change the brief "
+            f"<div style='{F}font-size:12px;color:{MUTED};margin-top:8px'>You can also ask it to change the pulse "
             f"(&ldquo;make it shorter&rdquo;) or add a connection.</div></div>"
         )
     )
@@ -741,7 +741,7 @@ def evidence_row(i, n=None, short=False):
 
 
 def evidence(preview):
-    """The items the brief cites, numbered. Everything collected stays with the run, for the agent to answer questions from."""
+    """The items the pulse cites, numbered. Everything collected stays with the run, for the agent to answer questions from."""
     cited = "".join(evidence_row(i, n, short=not preview) for n, i in enumerate(CITED, 1))
     table = f"<table role='presentation' width='100%' cellpadding='0' cellspacing='0'>{cited}</table>"
     if preview:  # collapsed until opened; clicking a citation opens it (COPY_JS)
@@ -753,7 +753,7 @@ def evidence(preview):
         f"<div style='{F}font-size:12px;color:{MUTED};margin-top:8px'>All {len(items)} items collected are kept with this run; "
         f"ask your agent about any of them.</div>"
     )
-    return section("Evidence", "Every item the brief cites") + card(table + more)
+    return section("Evidence", "Every item the pulse cites") + card(table + more)
 
 
 COPY_JS = """<script>
@@ -921,7 +921,7 @@ def markdown():
         out += [
             "## Ask me",
             "",
-            "Ask me directly here; I answer from this brief's evidence, with every claim cited. For example:",
+            "Ask me directly here; I answer from this pulse's evidence, with every claim cited. For example:",
             "",
         ]
         out += [f"- {q}" for q in x["questions"]] + [""]
@@ -947,7 +947,7 @@ def _plt():
         return plt
     except ImportError:
         print(
-            "matplotlib is missing, so the brief has no map or header art; install it with: python3 -m pip install -r requirements.txt"
+            "matplotlib is missing, so the pulse has no map or header art; install it with: python3 -m pip install -r requirements.txt"
         )
         return None
 
@@ -1128,7 +1128,7 @@ def asset(name):
 
 
 def draw_logo():
-    """The profile's logo (assets/logo.png or .jpg), embedded in the brief so email clients show it without fetching."""
+    """The profile's logo (assets/logo.png or .jpg), embedded in the pulse so email clients show it without fetching."""
     own = asset("logo")
     if not own:
         return False
@@ -1192,12 +1192,12 @@ def draw_header():
 
 os.makedirs("out", exist_ok=True)
 made = {"map.png": draw_map(), "matrix.png": draw_matrix(), "header.png": draw_header(), "logo.png": draw_logo()}
-cids = {name: make_msgid(domain="brief.local")[1:-1] for name, ok in made.items() if ok}
+cids = {name: make_msgid(domain="pulse.local")[1:-1] for name, ok in made.items() if ok}
 uri = lambda name: (
     ("data:image/png;base64," + base64.b64encode(open(f"out/{name}", "rb").read()).decode()) if name in cids else ""
 )
 html_preview = page(uri, preview=True)  # first render numbers the citations
-open("out/brief.md", "w").write(markdown())
+open("out/pulse.md", "w").write(markdown())
 open("out/preview.html", "w").write(html_preview)
 json.dump(CLAIMS, open("out/claims.json", "w"), indent=1, ensure_ascii=False)
 log = [json.loads(l) for l in open("checks_log.jsonl")] if os.path.exists("checks_log.jsonl") else []
@@ -1248,7 +1248,7 @@ for name, cid in cids.items():
     )
 open("out/email.eml", "wb").write(bytes(m))
 print(
-    f"wrote {info['folder']}/out/brief.md, preview.html and email.eml"
+    f"wrote {info['folder']}/out/pulse.md, preview.html and email.eml"
     + (" with the feedback map" if "map.png" in cids else "")
 )
 print(f"preview: {os.path.abspath('out/preview.html')}")

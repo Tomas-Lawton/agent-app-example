@@ -1,4 +1,4 @@
-# A scheduled, unattended Feedback Brief run (see setup/SKILL.md, Schedule).
+# A scheduled, unattended Customer Pulse run (see setup/SKILL.md, Schedule).
 # It carries only the run skill: setup/ is removed, so the agent has no instructions for changing its own reach.
 # Gemini CLI signs in to Vertex AI as the Cloud Run job's service account; secrets arrive as environment variables.
 # Tools are auto-approved (--yolo) because nobody is there to approve them: the boundary is this container, the job's
@@ -11,8 +11,8 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 RUN rm -rf setup .env runs && mkdir runs && chmod -R a-w /app && chmod -R u+w /app/runs
-ENV GOOGLE_GENAI_USE_VERTEXAI=true BRIEF_UNATTENDED=1
+ENV GOOGLE_GENAI_USE_VERTEXAI=true PULSE_UNATTENDED=1
 # PROFILE, GOOGLE_CLOUD_PROJECT and GOOGLE_CLOUD_LOCATION are set on the Cloud Run job; a Cloud Storage bucket is
 # mounted at /app/runs so runs persist. The image is the lock: read only except runs/, with no setup skill.
-CMD gemini --yolo -p "Run the feedback brief for profile ${PROFILE}, following SKILL.md. This is a scheduled run: do step 3 including the verifier, then stop; the job sends it." \
+CMD gemini --yolo -p "Run the Customer Pulse for profile ${PROFILE}, following SKILL.md. This is a scheduled run: do step 3 including the verifier, then stop; the job sends it." \
     && python3 engine/steps/send.py "${PROFILE}"

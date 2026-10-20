@@ -202,4 +202,4 @@ if summary["untaggedShare"] > cfg["scope"]["themes"]["maxUntaggedShare"]:
     )
 if errors:
     sys.exit("FIX themes.json or tags/, then run summarise.py again:\n  " + "\n  ".join(errors))
-print(f"next: write brief_plan.json and live_content.json, then run: python3 engine/steps/render.py {cfg['key']}")
+print(f"next: write plan.json and live_content.json, then run: python3 engine/steps/render.py {cfg['key']}")
