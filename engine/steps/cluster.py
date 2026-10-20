@@ -1,15 +1,5 @@
-"""Step 1, continued (run by collect.py): group similar feedback, so the agent reads related items together, and lay it out for the map.
-
-Usage (from the repository root, normally run by collect.py):  python3 engine/steps/cluster.py <key>
-
-Turns every item into a vector (TF-IDF word weights, reduced with LSA so related words land close together), groups
-the vectors with K-means (scope.json -> cluster.k), and places every item on a 2D map. Writes:
-  clusters.json         each cluster's size, top words and item ids, and every item's map position
-  reading/part_NN.txt   every item, cluster by cluster, one line each, in parts of scope.json -> cluster.readingChunk
-The clusters only organise the reading and the map. The agent's themes, and its tags on every item, are what count.
-Needs scikit-learn (requirements.txt).
-"""
 import os, sys
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # engine/
 import glob, json
 from core import config
@@ -44,10 +34,19 @@ else:
 
 clusters = []
 for g in sorted(set(labels), key=lambda g: -labels.count(g)):
-    clusters.append({"id": len(clusters) + 1, "size": labels.count(g), "terms": terms[g],
-                     "items": [items[n]["id"] for n in range(len(items)) if labels[n] == g]})
-json.dump({"clusters": clusters, "positions": {items[n]["id"]: xy[n] for n in range(len(items))}},
-          open("clusters.json", "w"), indent=1)
+    clusters.append(
+        {
+            "id": len(clusters) + 1,
+            "size": labels.count(g),
+            "terms": terms[g],
+            "items": [items[n]["id"] for n in range(len(items)) if labels[n] == g],
+        }
+    )
+json.dump(
+    {"clusters": clusters, "positions": {items[n]["id"]: xy[n] for n in range(len(items))}},
+    open("clusters.json", "w"),
+    indent=1,
+)
 
 by_id = {i["id"]: i for i in items}
 # carry tags from the previous run for items seen before (same connection and original id), so only new items need tagging
@@ -55,7 +54,10 @@ carried = {}
 if info.get("previous"):
     prev = os.path.join(config.ROOT, info["previous"])
     if os.path.exists(os.path.join(prev, "items.json")):
-        old_ids = {(i["source"], str(i.get("nativeId"))): i["id"] for i in json.load(open(os.path.join(prev, "items.json")))["items"]}
+        old_ids = {
+            (i["source"], str(i.get("nativeId"))): i["id"]
+            for i in json.load(open(os.path.join(prev, "items.json")))["items"]
+        }
         old_tags = {}
         for p_ in glob.glob(os.path.join(prev, "tags", "*.json")):
             old_tags.update(json.load(open(p_)))
@@ -73,7 +75,9 @@ for cl in clusters:
         rating = f"{i['rating']:g}/{i['ratingScale']}" if i.get("rating") is not None else "-"
         text = (f"{i['title']}: " if i.get("title") else "") + i["text"]
         was = f" | tagged last run: {', '.join(carried[iid]) or 'none'}" if iid in carried else ""
-        lines.append(f"{iid} | {i['date']} | {rating}{' | private' if i.get('private') else ''}{was} | {text[:c['textChars']]}")
+        lines.append(
+            f"{iid} | {i['date']} | {rating}{' | private' if i.get('private') else ''}{was} | {text[:c['textChars']]}"
+        )
 os.makedirs("reading", exist_ok=True)
 for f in os.listdir("reading"):
     os.remove(os.path.join("reading", f))
@@ -82,12 +86,17 @@ for line in lines:
     part.append(line)
     count += not line.startswith("## ")
     if count >= c["readingChunk"]:
-        open(f"reading/part_{n:02d}.txt", "w").write("\n".join(part) + "\n"); part, count, n = [], 0, n + 1
+        open(f"reading/part_{n:02d}.txt", "w").write("\n".join(part) + "\n")
+        part, count, n = [], 0, n + 1
 if count or part:
     open(f"reading/part_{n:02d}.txt", "w").write("\n".join(part) + "\n")
 parts = sorted(os.listdir("reading"))
 for cl in clusters:
     print(f"cluster {cl['id']}: {cl['size']:>4} items  {', '.join(cl['terms'][:6])}")
-print(f"{len(items)} items in {len(clusters)} clusters -> clusters.json, reading/ ({len(parts)} parts); "
-      f"{len(carried)} keep their tags from the previous run (tags/carried.json)")
-print(f"next: read every part in reading/, write themes.json, tag every item in tags/, then run: python3 engine/steps/summarise.py {cfg['key']}")
+print(
+    f"{len(items)} items in {len(clusters)} clusters -> clusters.json, reading/ ({len(parts)} parts); "
+    f"{len(carried)} keep their tags from the previous run (tags/carried.json)"
+)
+print(
+    f"next: read every part in reading/, write themes.json, tag every item in tags/, then run: python3 engine/steps/summarise.py {cfg['key']}"
+)

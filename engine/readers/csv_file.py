@@ -1,12 +1,3 @@
-"""File reader: an export from any tool (Google Play Console reviews, a helpdesk, a survey tool).
-
-user_scope.json source:
-  {"id": "tickets", "type": "file", "file": "data/support_tickets.csv", "private": true,
-   "columns": {"id": "ticket_id", "date": "created", "text": "message", "rating": "csat", "title": "subject", "url": "link"},
-   "ratingScale": 5, "maxItems": 500}
-The file must live inside the profile folder. The columns map the file's own names onto the use case's item
-shape (engine/scope.json -> itemShape); only `date` and `text` are required.
-"""
 import csv, os
 
 
@@ -25,15 +16,17 @@ def fetch(src, since, limit, profile_dir, timeout=None):
             if not text or not date or date < since:
                 continue
             r = c(row, "rating")
-            items.append({
-                "id": f"{src['id']}:{c(row, 'id') or n}",
-                "url": c(row, "url") or None,
-                "date": date,
-                "title": c(row, "title"),
-                "text": text,
-                "rating": float(r) if r else None,
-                "ratingScale": src.get("ratingScale") if r else None,
-            })
+            items.append(
+                {
+                    "id": f"{src['id']}:{c(row, 'id') or n}",
+                    "url": c(row, "url") or None,
+                    "date": date,
+                    "title": c(row, "title"),
+                    "text": text,
+                    "rating": float(r) if r else None,
+                    "ratingScale": src.get("ratingScale") if r else None,
+                }
+            )
             if len(items) >= limit:
                 break
     oldest = min((i["date"] for i in items), default=None)

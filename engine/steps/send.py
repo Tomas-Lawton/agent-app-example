@@ -1,17 +1,5 @@
-"""Step 4, the send gate: email the brief, only if it is inside the scope. Works with any email provider (SMTP).
-
-Usage (from the repository root):  python3 engine/steps/send.py <key> [--to address] [--dry-run]
-
-Before sending it (1) checks the user scope still fits inside the use case scope (config.load) and the recipient is
-the one in profiles/<key>/user_scope.json, (2) reruns every check on the run's files, and (3) on unattended runs,
-requires the independent verifier to have confirmed every claim. Any failure stops the send; there is no other way
-to send. Drafts in the brief are never posted.
-
-Email settings come from a .env file in the repository root (never committed), written by setup:
-  SMTP_HOST=smtp.gmail.com   SMTP_PORT=587   SMTP_USER=you@example.com   SMTP_PASSWORD=<app password>
-  SMTP_FROM=you@example.com  (optional, defaults to SMTP_USER)
-"""
 import os, sys
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # engine/
 import argparse, email, json, smtplib, ssl
 from email import policy
@@ -19,14 +7,18 @@ from email.utils import formataddr
 from core import config, checks
 
 ap = argparse.ArgumentParser()
-ap.add_argument("key"); ap.add_argument("--to"); ap.add_argument("--dry-run", action="store_true")
+ap.add_argument("key")
+ap.add_argument("--to")
+ap.add_argument("--dry-run", action="store_true")
 a = ap.parse_args()
 cfg, info = config.open_run(a.key)
 to = a.to or cfg["recipient"]
 
 if to not in cfg["userScope"]["recipients"][: cfg["scope"]["send"]["maxRecipients"]]:
-    sys.exit(f"BLOCKED: {to} is not the recipient in profiles/{a.key}/user_scope.json. "
-             "A new recipient is a change to the user scope, made only through setup.")
+    sys.exit(
+        f"BLOCKED: {to} is not the recipient in profiles/{a.key}/user_scope.json. "
+        "A new recipient is a change to the user scope, made only through setup."
+    )
 errors = checks.run(cfg, info, "items", "themes", "plan", "content")
 # unattended runs need every cited claim confirmed by the independent verifier (SKILL.md, step 3)
 if os.environ.get("BRIEF_UNATTENDED") == "1":
@@ -34,8 +26,10 @@ if os.environ.get("BRIEF_UNATTENDED") == "1":
     verdicts = json.load(open("verdicts.json")) if os.path.exists("verdicts.json") else {}
     unverified = [c["id"] for c in claims if not verdicts.get(c["id"], {}).get("supported")]
     if not claims or unverified:
-        errors.append(f"verify: {len(unverified) or 'all'} cited claims are not confirmed by the verifier (verdicts.json); "
-                      "an unattended brief is only sent when every claim is supported by the items it cites")
+        errors.append(
+            f"verify: {len(unverified) or 'all'} cited claims are not confirmed by the verifier (verdicts.json); "
+            "an unattended brief is only sent when every claim is supported by the items it cites"
+        )
 if errors or not os.path.exists("out/email.eml"):
     sys.exit("BLOCKED: checks failed:\n  " + "\n  ".join(errors or ["out/email.eml not found; run render.py first"]))
 print("gate: recipient in the user scope, every check passed")
@@ -47,13 +41,16 @@ if not (host and user and pw):
 port, sender = int(get("SMTP_PORT", "587")), get("SMTP_FROM", user)
 
 m = email.message_from_bytes(open("out/email.eml", "rb").read(), policy=policy.default)
-del m["From"]; del m["To"]
+del m["From"]
+del m["To"]
 m["From"] = formataddr((cfg.get("wording", {}).get("briefName", "Feedback Brief"), sender))
 m["To"] = to
 if a.dry_run:
     sys.exit(f"dry run: would send \"{m['Subject']}\" from {sender} to {to} via {host}:{port}")
 ctx = ssl.create_default_context()
-with (smtplib.SMTP_SSL(host, port, context=ctx, timeout=30) if port == 465 else smtplib.SMTP(host, port, timeout=30)) as s:
+with (
+    smtplib.SMTP_SSL(host, port, context=ctx, timeout=30) if port == 465 else smtplib.SMTP(host, port, timeout=30)
+) as s:
     if port != 465:
         s.starttls(context=ctx)
     s.login(user, pw)
