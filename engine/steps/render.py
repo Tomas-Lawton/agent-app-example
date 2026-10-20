@@ -7,7 +7,8 @@ with a draft ticket). Then builds from the checked files only; the layout is fix
 and wording. Every theme and quote shows its source. Draws the feedback map (every item placed by similarity,
 coloured by the agent's theme) with matplotlib. Writes:
   out/brief.md       the brief as markdown, for the chat of any harness
-  out/map.png        the feedback map
+  out/map.png        the feedback map (colour shows the theme, shape shows the connection)
+  out/header.png     header artwork in the profile's colours (or the profile's own assets/header.png)
   out/preview.html   the full visual brief, with copy buttons
   out/email.html, out/email.txt, out/email.eml   the email
 The reader can copy each action's draft ticket and open any source. Everything else is done by talking to the agent.
@@ -41,6 +42,10 @@ PRODUCT = cfg.get("product", {})
 F = "font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Arial,Helvetica,sans-serif;"  # no quotes: styles sit in single quoted attributes
 e = lambda s: html.escape(str(s if s is not None else ""))
 themes_by_id = {t["id"]: t for t in S["themes"]}
+SRC_COLOURS = ["#334155", "#0f766e", "#9333ea", "#b45309", "#be123c"]
+SRC_MARKERS = ["o", "^", "s", "D", "P"]
+SRC_SYMBOLS = ["&#9679;", "&#9650;", "&#9632;", "&#9670;", "&#10010;"]  # the same shapes, for the html
+SRC_STYLE = {c["id"]: (SRC_COLOURS[n % 5], SRC_MARKERS[n % 5], SRC_SYMBOLS[n % 5]) for n, c in enumerate(S.get("connections", []))}
 
 
 # ---------------------------------------------------------------- pieces
@@ -98,9 +103,16 @@ def delta(v, unit="", better="up"):
     return f"<span style='color:{'#15803d' if good else '#c2410c'}'>{'+' if v > 0 else ''}{v:g}{unit} vs last run</span>"
 
 
+def source_tag(sid):
+    """A small coloured tag naming the connection, with the same shape it has on the map."""
+    colour, _, symbol = SRC_STYLE.get(sid, ("#334155", "o", "&#9679;"))
+    return (f"<span style='display:inline-block;{F}font-size:11px;font-weight:600;color:{colour};background:#ffffff;"
+            f"border:1px solid {colour};border-radius:999px;padding:1px 8px;margin-right:6px'>{symbol} {source_label(sid)}</span>")
+
+
 def quote(q):
     it = items.get(q["item"], {})
-    meta = " &middot; ".join(filter(None, [source_label(it.get("source")), e(it.get("date")), stars(it.get("rating"), it.get("ratingScale"))]))
+    meta = source_tag(it.get("source")) + " &middot; ".join(filter(None, [e(it.get("date")), stars(it.get("rating"), it.get("ratingScale"))]))
     link = f" &middot; <a href='{e(it['url'])}' style='color:{BRAND}'>open</a>" if it.get("url") else ""
     return (f"<div style='background:{BG};border-radius:10px;padding:10px 14px;margin:10px 0 0'>"
             f"<div style='{F}font-size:14px;line-height:1.55;color:{INK}'>&ldquo;{e(q['text'])}&rdquo;</div>"
@@ -156,7 +168,9 @@ def body(preview, img):
     icon_td = (f"<td width='64' valign='middle'><img src='{e(icon)}' width='52' height='52' alt='' "
                f"style='display:block;border-radius:12px;border:2px solid rgba(255,255,255,.6)'/></td>") if icon else ""
     rows = [
-        f"<tr><td bgcolor='{BRAND}' style='background:{BRAND};background-image:linear-gradient(135deg,{BRAND} 0%,{BRAND2} 100%);padding:26px 24px'>"
+        f"<tr><td bgcolor='{BRAND}' background='{img('header.png')}' style='background:{BRAND};background-image:"
+        + (f"url({img('header.png')})" if img("header.png") else f"linear-gradient(135deg,{BRAND} 0%,{BRAND2} 100%)")
+        + f";background-size:cover;background-position:center;padding:34px 24px'>"
         f"<table role='presentation' width='100%' cellpadding='0' cellspacing='0'><tr>{icon_td}<td valign='middle'>"
         f"<div style='{F}font-size:12px;color:#ffffff;opacity:.9;text-transform:uppercase;letter-spacing:1px'>{e(PRODUCT.get('name'))}</div>"
         f"<div style='{F}font-size:26px;font-weight:700;color:#ffffff;margin-top:2px'>{e(NAME)}</div>"
@@ -176,9 +190,8 @@ def body(preview, img):
         ok = c["status"] == "ok"
         tail = f"{c.get('kept', 0)} items" if ok else c["status"]
         lock = " &middot; private" if c.get("private") else ""
-        chips.append(f"<span style='display:inline-block;{F}font-size:12px;color:{INK if ok else '#c2410c'};background:#ffffff;"
-                     f"border:1px solid {LINE};border-radius:999px;padding:4px 10px;margin:8px 6px 0 0'>"
-                     f"{source_label(c['id'])} &middot; {e(c['type'])} &middot; {e(tail)}{lock}</span>")
+        chips.append(f"<span style='display:inline-block;margin:8px 4px 0 0'>{source_tag(c['id'])}"
+                     f"<span style='{F}font-size:12px;color:{INK if ok else '#c2410c'}'>{e(c['type'])} &middot; {e(tail)}{lock}</span></span>")
     rows.append(f"<tr><td style='padding:6px 24px 0'><span style='{F}font-size:12px;color:{MUTED}'>Read from:</span> {''.join(chips)}</td></tr>")
     if S.get("capped"):
         rows.append(f"<tr><td style='padding:8px 24px 0'><div style='{F}font-size:12px;color:{MUTED}'>Read the {t['items']} most recent items in the window.</div></td></tr>")
@@ -197,14 +210,14 @@ def body(preview, img):
         rating = f" &middot; average rating {s['avgRating']}" if s["avgRating"] is not None else ""
         size = f"{s['count']} items &middot; {s['share']}% of all feedback &middot; {s['firstHalf']} then {s['secondHalf']} across the period"
         prev = f" &middot; {s['previousShare']}% last run" if s.get("previousShare") is not None else ""
-        srcs = " &middot; ".join(f"{source_label(k)} {v}" for k, v in (s.get("sources") or {}).items())
+        srcs = "".join(f"{source_tag(k)}<span style='margin-right:8px'>{v}</span>" for k, v in (s.get("sources") or {}).items())
         rows.append(card(
             f"<a name='{e(th['id'])}' id='{e(th['id'])}'></a><div>{pill(s['kind'], KIND.get(s['kind'], BRAND), solid=True)}{trend}</div>"
             f"<div style='{F}font-size:17px;font-weight:700;color:{INK};margin-top:4px'>{e(th['title'])}</div>"
             f"<div style='{F}font-size:12px;color:{MUTED};margin-top:3px'>{size}{prev}{rating}</div>"
             f"<div style='{F}font-size:14px;line-height:1.55;color:{INK};margin-top:8px'>{e(th['summary'])}</div>"
             + "".join(quote(q) for q in th["quotes"])
-            + f"<div style='{F}font-size:12px;color:{MUTED};margin-top:10px'>Sources: {srcs}</div>",
+            + f"<div style='{F}font-size:12px;color:{MUTED};margin-top:10px'>From {srcs}</div>",
             accent=KIND.get(s["kind"], BRAND)))
 
     if x.get("actions"):
@@ -323,16 +336,21 @@ def markdown():
 
 
 # ---------------------------------------------------------------- write
-def draw_map():
-    """Every item at its position from cluster.py, coloured by its first kept theme."""
-    if not os.path.exists("clusters.json"):
-        return False
+def _plt():
     try:
         import matplotlib
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
+        return plt
     except ImportError:
-        print("matplotlib is missing, so the brief has no map; install it with: python3 -m pip install -r requirements.txt")
+        print("matplotlib is missing, so the brief has no map or header art; install it with: python3 -m pip install -r requirements.txt")
+        return None
+
+
+def draw_map():
+    """Every item at its position from cluster.py: colour shows its theme, shape shows its connection."""
+    plt = _plt()
+    if not plt or not os.path.exists("clusters.json"):
         return False
     pos = json.load(open("clusters.json"))["positions"]
     tags = {}
@@ -341,29 +359,66 @@ def draw_map():
     shown = [th["id"] for th in x["themes"]]
     palette = [BRAND, ACCENT, "#c2410c", "#7c3aed", "#15803d", "#0891b2", "#be185d", "#4d7c0f"]
     colour = {tid: palette[n % len(palette)] for n, tid in enumerate(shown)}
-    fig, ax = plt.subplots(figsize=(8, 4.6), dpi=150)
-    for tid in [None] + shown:
-        pts = [pos[i] for i in pos if (next((t for t in (tags.get(i) or []) if t in colour), None)) == tid]
+    fig, ax = plt.subplots(figsize=(8, 4.8), dpi=160)
+    fig.patch.set_facecolor("white"); ax.set_facecolor(TINT)
+    for iid, (px, py) in pos.items():
+        tid = next((t for t in (tags.get(iid) or []) if t in colour), None)
+        _, marker, _ = SRC_STYLE.get(items.get(iid, {}).get("source"), ("", "o", ""))
+        ax.scatter(px, py, s=26 if tid else 12, marker=marker, color=colour.get(tid, "#c3cad3"), alpha=.9 if tid else .5,
+                   edgecolors="white", linewidths=.4, zorder=3 if tid else 2)
+    for tid in shown:  # the theme's name at the centre of its points
+        pts = [pos[i] for i in pos if tid in (tags.get(i) or [])]
         if pts:
-            ax.scatter([p[0] for p in pts], [p[1] for p in pts], s=14 if tid else 8, alpha=.85 if tid else .35,
-                       color=colour.get(tid, "#b8c0c8"), label=themes_by_id[tid]["title"][:40] if tid else "No theme", linewidths=0)
+            cx, cy = sum(p[0] for p in pts) / len(pts), sum(p[1] for p in pts) / len(pts)
+            ax.annotate(themes_by_id[tid]["title"][:34], (cx, cy), fontsize=7.5, fontweight="bold", color=colour[tid], ha="center",
+                        va="center", zorder=4, bbox=dict(boxstyle="round,pad=0.3", fc="white", ec=colour[tid], lw=.8, alpha=.92))
+    handles = [plt.Line2D([], [], marker=SRC_STYLE[c["id"]][1], color="#55606e", linestyle="", markersize=6, label=c["label"])
+               for c in S.get("connections", []) if c["id"] in SRC_STYLE]
+    ax.legend(handles=handles, loc="lower right", frameon=True, fontsize=7.5, framealpha=.9, title="Shape = source", title_fontsize=7.5)
     ax.set_xticks([]); ax.set_yticks([])
     for side in ax.spines.values():
         side.set_visible(False)
-    ax.legend(loc="center left", bbox_to_anchor=(1, .5), frameon=False, fontsize=8)
     fig.tight_layout()
     fig.savefig("out/map.png", facecolor="white")
     plt.close(fig)
     return True
 
 
+def draw_header():
+    """Header artwork in the profile's colours, unless the profile supplies its own (profiles/<key>/assets/header.png)."""
+    own = os.path.join(config.ROOT, "profiles", cfg["key"], "assets", "header.png")
+    if os.path.exists(own):
+        import shutil
+        shutil.copy(own, "out/header.png")
+        return True
+    plt = _plt()
+    if not plt:
+        return False
+    import math, random
+    from matplotlib.colors import LinearSegmentedColormap
+    rnd = random.Random(cfg["key"])
+    fig = plt.figure(figsize=(12.8, 3.2), dpi=100)
+    ax = fig.add_axes([0, 0, 1, 1]); ax.set_xlim(0, 12.8); ax.set_ylim(0, 3.2); ax.axis("off")
+    grad = [[i / 255 for i in range(256)]]
+    ax.imshow(grad, extent=[0, 12.8, 0, 3.2], aspect="auto", cmap=LinearSegmentedColormap.from_list("b", [BRAND, BRAND2]))
+    for k in range(5):  # soft waves
+        ys = [1.2 + .35 * k + .45 * math.sin(xv / 1.7 + k * 1.3) for xv in [i / 10 for i in range(129)]]
+        ax.fill_between([i / 10 for i in range(129)], ys, 3.2 if k % 2 else 0, color="white", alpha=.035 + .01 * k, lw=0)
+    for _ in range(14):  # light circles
+        ax.add_patch(plt.Circle((rnd.uniform(6, 12.8), rnd.uniform(0, 3.2)), rnd.uniform(.2, 1.1), color=ACCENT if rnd.random() < .25 else "white",
+                                alpha=rnd.uniform(.05, .14), lw=0))
+    fig.savefig("out/header.png")
+    plt.close(fig)
+    return True
+
+
 os.makedirs("out", exist_ok=True)
-has_map = draw_map()
-cid = make_msgid(domain="brief.local")[1:-1]
-uri = lambda name: ("data:image/png;base64," + base64.b64encode(open(f"out/{name}", "rb").read()).decode()) if has_map and name == "map.png" else ""
+made = {"map.png": draw_map(), "header.png": draw_header()}
+cids = {name: make_msgid(domain="brief.local")[1:-1] for name, ok in made.items() if ok}
+uri = lambda name: ("data:image/png;base64," + base64.b64encode(open(f"out/{name}", "rb").read()).decode()) if name in cids else ""
 open("out/brief.md", "w").write(markdown())
 open("out/preview.html", "w").write(page(uri, preview=True))
-html_part = page(lambda name: f"cid:{cid}" if has_map and name == "map.png" else "")
+html_part = page(lambda name: f"cid:{cids[name]}" if name in cids else "")
 open("out/email.html", "w").write(html_part)
 open("out/email.txt", "w").write(text())
 m = EmailMessage()
@@ -371,8 +426,8 @@ m["Subject"], m["To"] = x["subject"], cfg["recipient"]
 m["Date"] = format_datetime(datetime.datetime.now().astimezone())
 m.set_content(text())
 m.add_alternative(html_part, subtype="html")
-if has_map:
-    m.get_payload()[1].add_related(open("out/map.png", "rb").read(), "image", "png", cid=f"<{cid}>", disposition="inline", filename="map.png")
+for name, cid in cids.items():
+    m.get_payload()[1].add_related(open(f"out/{name}", "rb").read(), "image", "png", cid=f"<{cid}>", disposition="inline", filename=name)
 open("out/email.eml", "wb").write(bytes(m))
-print(f"wrote {info['folder']}/out/brief.md, preview.html and email.eml" + (" with the feedback map" if has_map else ""))
+print(f"wrote {info['folder']}/out/brief.md, preview.html and email.eml" + (" with the feedback map" if "map.png" in cids else ""))
 print(f"preview: {os.path.abspath('out/preview.html')}")

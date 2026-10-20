@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "deny": [
+      "Edit(./engine/**)",
+      "Write(./engine/**)",
+      "Edit(./SKILL.md)",
+      "Write(./SKILL.md)",
+      "Bash(git commit --amend:*)",
+      "Bash(git push:*)"
+    ],
+    "ask": [
+      "Edit(./profiles/*/user_scope.json)",
+      "Write(./profiles/*/user_scope.json)",
+      "Bash(git commit:*)"
+    ]
+  }
+}

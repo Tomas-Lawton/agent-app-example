@@ -14,7 +14,7 @@ Every company gets customer feedback: support tickets, surveys, issue trackers, 
 - **The main themes,** each with real quotes **and their sources**
 - **What's new, growing or rising,** computed from real dates
 - **The numbers:** volume, ratings, items per day and per theme, all counted by code
-- **A feedback map:** every item placed near similar feedback and coloured by theme
+- **A feedback map:** every item placed near similar feedback, coloured by theme and shaped by source
 
 You get it **in the chat**, **by email**, or both, over the time window you choose (a weekly brief by default). From the brief you can email an action's owner, copy its ticket, jump to the evidence and open any source. Anything else, such as filing a ticket, asking why a theme is growing or changing the brief, you do by talking to the agent.
 
@@ -77,6 +77,7 @@ Safety is designed into the use case, not left to the agent:
 - **Exact parts are code:** the model reads and judges; code counts every item and computes every number.
 - **Fixed reach:** feedback is read only through `collect.py`, from the connections in your locked user scope, which can never go beyond the use case scope. If a site refuses access, the run records it and never tries another way round.
 - **A send gate:** `send.py` reruns every check and emails only your approved recipient. Nothing in the project files tickets or posts anything.
+- **The rules can't be quietly changed:** setup commits your user scope once you confirm it, and the send gate refuses to send if the engine, the skill or your user scope differ from the committed version. In Claude Code, [`.claude/settings.json`](.claude/settings.json) also denies edits to the engine and asks you before any change to a user scope.
 - **Scheduled runs** carry only the run skill, never the setup skill, so an unattended agent has no instructions for changing its own reach. On Google Cloud it runs as its own least privilege service account, narrower than the person who set it up.
 
 **Limit:** the checks catch invented, misquoted, untagged or out of bounds output, not a weak judgement call.
@@ -93,6 +94,7 @@ When you choose a schedule, setup can deploy it on Google Cloud for you, confirm
 - a **service account** for the profile with only what it needs (Vertex AI to run the model, its own secrets, read only on any BigQuery dataset)
 - **Secret Manager** for the email password and service keys
 - a **Cloud Run job** built from the [`Dockerfile`](Dockerfile): the project without the setup skill, running Gemini CLI headless, then the send gate
+- **Cloud Storage** for the runs, mounted on the job, so each scheduled brief compares with the last and every run is kept as an audit trail
 - **Cloud Scheduler** on your schedule, in your timezone, after one run triggered by hand and checked with you
 
 The use case itself has no Google Cloud dependency; any scheduler that can start a headless harness works the same way.
@@ -112,6 +114,7 @@ A BigQuery connection uses Google application default credentials, or the identi
 
 ```
 AGENTS.md            what the agent does on your first message
+.claude/settings.json  harness permissions: no edits to the engine, ask before changing a user scope
 SKILL.md             the use case: four steps, rules and file formats
 setup/SKILL.md       the setup conversation, and deploying a scheduled run
 Dockerfile           the scheduled run's container

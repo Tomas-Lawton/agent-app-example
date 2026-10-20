@@ -5,7 +5,7 @@ description: Runs a customer feedback brief for a profile in profiles/<key>/ - w
 
 # Feedback Brief skill
 
-**Layers.** The use case (this skill, `engine/`, `engine/scope.json`) decides what happens. The user scope (`profiles/<key>/user_scope.json`, locked) holds the user's connections, recipient and schedule. The profile (`PROFILE.md`, and `profile.json` from it) holds focus, look, time window and output format. Read `PROFILE.md` first. Never edit `engine/`, `scope.json` or `user_scope.json` during a run.
+**Layers.** The use case (this skill, `engine/`, `engine/scope.json`) decides what happens. The user scope (`profiles/<key>/user_scope.json`, locked) holds the user's connections, recipient and schedule. The profile (`PROFILE.md`, and `profile.json` from it) holds focus, look, time window and output format. Read `PROFILE.md` first. Never edit `engine/`, `scope.json` or `user_scope.json` during a run: the send gate compares them with the committed version and refuses to send if they differ.
 
 **Rules.** Collect only through `collect.py`: no web search or other sources, and if a connection is blocked, report it and never try another way round. Quote word for word; never quote private items (warehouse data, items marked private) unless the user scope sets `privateQuotes`. Take every number from `summary.json`. Never file or post anything: tickets are drafts for a person. Say when evidence is thin or the period was quiet. When a script stops, fix what it names and run it again.
 

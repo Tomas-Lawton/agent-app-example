@@ -25,7 +25,7 @@ The user names their tools; you work out the connection. Never offer write acces
 ## Then
 1. Create `profiles/<key>/` with three files, using the demo's as a template for their shape only: `mkdir profiles/<key> && cp profiles/demo/{PROFILE.md,profile.json,user_scope.json} profiles/<key>/`. Replace every value with the user's answers (never keep the demo's focus, names or connections). Write `PROFILE.md` in the user's words, and `profile.json`: `product` (`name`, and `iconUrl` for a logo image), `reader`, `focus`, `windowDays` (default 7), `delivery` (`chat`, `email` or `both`), `wording.briefName`, `theme` colours (`brand`, `brand2`, `accent`, `tint`).
 2. Fill in `user_scope.json`: `timezone`, one `recipients` address, `schedule` (`null` for on request), and each connection below. Test each one by running `python3 engine/steps/collect.py <key>` and showing the user a few items from `items.json`; keep it only when they confirm.
-3. Set up email and the schedule if chosen (below), read back the connections, recipient and schedule, and say they stay fixed until changed through setup.
+3. Set up email and the schedule if chosen (below), read back the connections, recipient and schedule, and ask the user to confirm. Then **lock** it: commit the profile with `git add profiles/<key> && git commit -m "Profile <key>: approved by the user"` (if the project has no git repository yet, run `git init` first). The send gate refuses to send if the engine, the skill or the user scope differ from the committed version, so any later change has to go through setup and a new commit.
 4. Run the first brief with [SKILL.md](../SKILL.md) and present it in the chosen format.
 
 ## Connections
@@ -56,12 +56,13 @@ Record it in `user_scope.json` → `schedule`, for example `{"days": ["Mon"], "t
 2. Create one service account for this profile, `brief-<key>@<project>.iam.gserviceaccount.com`, with only: Vertex AI User (to run the model), Secret Manager Secret Accessor on this profile's secrets, and for a warehouse connection BigQuery Data Viewer on that dataset plus BigQuery Job User. Nothing else; never a broader role.
 3. Put each value from `.env` that the profile uses (email password, service keys) in Secret Manager, one secret each.
 4. Build the image from the repository `Dockerfile` (it installs Gemini CLI, which signs in to Vertex AI as the service account, and removes `setup/`), push it to Artifact Registry, and create a Cloud Run job that runs as the service account, with the secrets as environment variables and `PROFILE=<key>`. Commit the profile first or add it to the image; it must not contain secrets.
-5. Create a Cloud Scheduler job in the user's timezone that runs the Cloud Run job on the schedule.
-6. Run the job once by hand, read its logs with the user (every step and the send gate should pass), and only then enable the scheduler. To pause, disable the scheduler job and set `schedule` back to `null`.
+5. Create a Cloud Storage bucket for this profile's runs, give the service account Storage Object Admin on that bucket only, and mount it on the Cloud Run job at `/app/runs`, so each scheduled run can compare with the last one and every run stays as an audit trail.
+6. Create a Cloud Scheduler job in the user's timezone that runs the Cloud Run job on the schedule.
+7. Run the job once by hand, read its logs with the user (every step and the send gate should pass), and only then enable the scheduler. To pause, disable the scheduler job and set `schedule` back to `null`.
 
 **Elsewhere:** any scheduler that can start a headless harness on a machine with the project (cron, another cloud's job runner) works, following the same rules: the run skill only, a read only project except `runs/`, a least privilege identity, secrets outside the project.
 
 ## Changing things later
 - Focus, tone, look, output format: edit `PROFILE.md` and `profile.json`.
-- A connection, the recipient or the schedule: a user scope change; follow the sections above and confirm with the user.
+- A connection, the recipient or the schedule: a user scope change; follow the sections above, confirm with the user, and commit it again.
 - A new kind of connection, write access, looser limits, posting replies: a change to the use case itself, not setup.
