@@ -68,23 +68,30 @@ def items(cfg, info):
 def themes(cfg, info):
     err, lim = [], cfg["scope"]["themes"]
     d, by_id = load("themes.json") or {}, {i["id"]: i for i in (load("items.json") or {"items": []})["items"]}
-    ids, kept = set(), 0
+    ids, kept, watch = set(), 0, 0
     for k, t in enumerate(d.get("themes") or []):
         p = f"themes[{k}] ({t.get('id')})"
         if not SLUG.match(str(t.get("id", ""))) or t.get("id") in ids: err.append(f"`{p}.id` must be a unique lowercase slug")
         ids.add(t.get("id"))
         if t.get("kind") not in ("problem", "request", "praise", "question"): err.append(f"`{p}.kind` must be problem, request, praise or question")
-        if t.get("decision") not in ("keep", "drop") or not str(t.get("reason", "")).strip(): err.append(f"`{p}` needs a decision and a reason")
+        if t.get("decision") not in ("keep", "watch", "drop") or not str(t.get("reason", "")).strip(): err.append(f"`{p}` needs a decision (keep, watch or drop) and a reason")
         for f in ("title", "summary"): _text(err, f"{p}.{f}", t.get(f))
         sc, c = t.get("scores") or {}, t.get("computed") or {}
         for f, hi in (("impact", 3), ("actionability", 2)):
             if not isinstance(sc.get(f), int) or not 0 <= sc[f] <= hi: err.append(f"`{p}.scores.{f}` must be a whole number from 0 to {hi}")
-        if t.get("decision") != "keep":
+        if t.get("decision") == "watch":  # rare but serious: below the keep score, still shown on the watchlist
+            watch += 1
+            if c.get("score", 0) >= lim["keepScore"]: err.append(f"`{p}` scores {c.get('score')}, enough to keep; keep it instead of watching it")
+            if sc.get("impact", 0) < 2: err.append(f"`{p}` is on the watchlist, which is only for serious items (impact 2 or 3)")
+            if not c.get("count"): err.append(f"`{p}` is on the watchlist but no item is tagged with it")
+        elif t.get("decision") == "keep":
+            kept += 1
+            if c.get("score", 0) < lim["keepScore"]: err.append(f"`{p}` is kept with score {c.get('score')}; below {lim['keepScore']} drop it, or watch it if it is serious")
+        else:
             continue
-        kept += 1
-        if c.get("score", 0) < lim["keepScore"]: err.append(f"`{p}` is kept with score {c.get('score')}; below {lim['keepScore']} must be dropped")
         ev = t.get("evidence") or []
-        if len(ev) < lim["minEvidence"]: err.append(f"`{p}` needs at least {lim['minEvidence']} quotes")
+        need = 1 if t.get("decision") == "watch" else lim["minEvidence"]
+        if len(ev) < need: err.append(f"`{p}` needs at least {need} quote{'s' if need > 1 else ''}")
         for j, e in enumerate(ev):
             it = by_id.get(e.get("item"))
             if not it or e["item"] not in (c.get("items") or []): err.append(f"`{p}.evidence[{j}]` must name an item tagged with this theme"); continue
@@ -92,11 +99,12 @@ def themes(cfg, info):
             if not verbatim(e.get("quote"), it): err.append(f"`{p}.evidence[{j}]` does not appear word for word in `{e['item']}`; copy it exactly")
             if it.get("private") and not cfg["userScope"].get("privateQuotes"): err.append(f"`{p}.evidence[{j}]` quotes a private item; describe it instead")
     if kept > lim["maxThemes"]: err.append(f"{kept} kept themes; keep at most {lim['maxThemes']}")
+    if watch > lim["maxWatch"]: err.append(f"{watch} watched themes; watch at most {lim['maxWatch']}")
     return err
 
 
-def _kept():
-    return {t["id"]: t for t in (load("themes.json") or {}).get("themes", []) if t.get("decision") == "keep" and t.get("computed")}
+def _kept(decision="keep"):
+    return {t["id"]: t for t in (load("themes.json") or {}).get("themes", []) if t.get("decision") == decision and t.get("computed")}
 
 
 def plan(cfg, info):
@@ -111,6 +119,7 @@ def plan(cfg, info):
         if t["computed"]["score"] < lim["actionScore"]: err.append(f"`actions[{k}]` theme scores {t['computed']['score']}; actions need {lim['actionScore']}")
         if a["theme"] not in show: err.append(f"action theme `{a['theme']}` must also be in `themes`")
     if not 1 <= len(show) <= lim["maxThemes"] or any(tid not in kept for tid in show): err.append(f"`themes` must list 1 to {lim['maxThemes']} kept theme ids")
+    if sorted(d.get("watch") or []) != sorted(_kept("watch")): err.append(f"`watch` must list every watched theme: {', '.join(sorted(_kept('watch'))) or 'none'}")
     return err
 
 
@@ -124,6 +133,16 @@ def content(cfg, info):
     for f in ("subject", "preheader", "headline", "footer"): _text(err, f, x.get(f))
     if [a.get("theme") for a in x.get("actions") or []] != [a.get("theme") for a in p.get("actions") or []]: err.append("`actions` must follow the plan")
     if [t.get("id") for t in x.get("themes") or []] != p.get("themes"): err.append("`themes` must be the plan's themes, in order")
+    watched = _kept("watch")
+    if [w.get("id") for w in x.get("watch") or []] != (p.get("watch") or []): err.append("`watch` must be the plan's watched themes, in order")
+    for k, w in enumerate(x.get("watch") or []):
+        t = watched.get(w.get("id")) or {}
+        _text(err, f"watch[{k}].title", w.get("title"))
+        _cited(err, f"watch[{k}].why", w.get("why"), set(t.get("computed", {}).get("items") or []), by_id)
+        ev = {(e.get("item"), norm(e.get("quote"))) for e in t.get("evidence") or []}
+        if not 1 <= len(w.get("quotes") or []) <= 2: err.append(f"`watch[{k}]` shows 1 or 2 quotes")
+        for j, q in enumerate(w.get("quotes") or []):
+            if (q.get("item"), norm(q.get("text"))) not in ev: err.append(f"`watch[{k}].quotes[{j}]` is not one of the theme's checked quotes")
     for k, t in enumerate(x.get("themes") or []):
         _cited(err, f"themes[{k}].summary", t.get("summary"), set((kept.get(t.get("id")) or {}).get("computed", {}).get("items") or []), by_id)
     for k, a in enumerate(x.get("actions") or []):

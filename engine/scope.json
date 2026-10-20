@@ -83,6 +83,7 @@
     "actionScore": 6,
     "minEvidence": 2,
     "maxQuotesPerTheme": 3,
+    "maxWatch": 3,
     "minQuoteWords": 4,
     "maxUntaggedShare": 25
   },

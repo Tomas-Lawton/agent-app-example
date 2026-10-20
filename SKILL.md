@@ -26,17 +26,19 @@ Run every command from the repository root. When you need anything the scripts d
 - Then tag **every** item: for each `reading/part_NN.txt`, write `tags/part_NN.json` mapping each item id to its theme ids (`[]` if none fits). Do one part at a time. Items marked `tagged last run` already carry those tags (`tags/carried.json`); you only need to tag them again if their theme was renamed or dropped.
 - **Keep it efficient.** If you can start sub-agents, give each reading part to one on a smaller, faster model with little or no extended thinking, with `themes.json` and that part only; tagging is routine. Keep finding themes, planning and writing on your main model.
 - Run `python3 engine/steps/summarise.py <key>`. Code checks every item is tagged, counts each theme exactly, computes trends from the items' dates and the previous run, and scores the themes. Keep a theme at 4 or more. If too many items fit no theme, it stops: add or widen a theme and retag.
+- **Watchlist: rare but serious.** Some feedback matters even when there is very little of it: anything `PROFILE.md` says always matters, and anything suggesting fraud or scams, harm or safety risks, a vulnerable customer, exposed personal data, or a complaint to a regulator, ombudsman or lawyer. Judge this by reading, never by keywords. Give such items their own theme, tag them, and if it scores below 4, set `"decision": "watch"` instead of dropping it (impact 2 or 3, at least one quote, up to 3 watched themes). Watched themes are always shown, on the brief's watchlist.
 ```json
 {"themes": [{"id": "cards-declined", "title": "Cards declined by the new fraud rules since Thursday", "kind": "problem",
   "summary": "Two or three sentences in your words: what, since when, anything that narrows it.",
   "evidence": [{"item": "tickets-012", "quote": "copied word for word, at least four words"}],
   "scores": {"impact": 3, "actionability": 2}, "decision": "keep", "reason": "one sentence"}]}
 ```
-`kind` is problem, request, praise or question. Quotes must come from items tagged with the theme.
+`kind` is problem, request, praise or question. `decision` is keep, watch or drop. Quotes must come from items tagged with the theme.
 
 **3. Plan and write.** Write `brief_plan.json` and `live_content.json`, then run `python3 engine/steps/render.py <key>`.
 - Up to three actions, on themes scoring 6 or more, most important first, owned by roles. Praise is never an action. If nothing material changed, set `quietWeek: true` and say so.
 - Each action has a **draft ticket** for the owning team: a clear title, and a body with what's happening, the evidence (counts from `summary.json`, a short quote), and what to check first. Never file it.
+- **Watchlist:** list every watched theme in the plan's `watch`, and for each write a title, one or two cited sentences on why it matters (`why`), and one or two of its quotes.
 - **Quotes:** show three per theme (fewer only if the theme has fewer checked quotes). The theme summary cites the quoted items along with the others it rests on.
 - **Cite as you write.** End every sentence in a theme summary, action detail and ticket body with the items it rests on, like `[tickets-012, survey-087]`, using items tagged with that theme. Code checks every sentence has citations and every cited item exists and belongs; the brief links each citation to the item.
 - Copy `dateLabel` and `windowLabel` from `run.json`; start `subject` with the brief's name; quotes come from the theme's `evidence`; numbers only from `summary.json`. No links in prose (render adds sources, links and citations).
@@ -44,13 +46,14 @@ Run every command from the repository root. When you need anything the scripts d
 ```json
 {"headline": "Most important thing first, then what's next.", "quietWeek": false,
  "actions": [{"theme": "cards-declined", "action": "Review the new fraud rule thresholds", "owner": "Head of card fraud operations", "why": "Customers can't pay."}],
- "themes": ["cards-declined", "login-lockouts"]}
+ "themes": ["cards-declined", "login-lockouts"], "watch": ["scam-calls"]}
 ```
 ```json
 {"meta": {"dateLabel": "...", "windowLabel": "..."}, "subject": "Weekly Feedback Brief: ...", "preheader": "One sentence.", "headline": "...",
  "actions": [{"theme": "cards-declined", "title": "Reduce false fraud declines", "detail": "One or two sentences, each cited [tickets-012].", "owner": "...",
    "ticket": {"title": "False declines on everyday card purchases since Thursday", "body": "What is happening [tickets-012, survey-087]. What to check first [tickets-031]."}}],
  "themes": [{"id": "cards-declined", "title": "...", "summary": "Each sentence ends with its citations [tickets-012, tickets-019].", "quotes": [{"item": "tickets-012", "text": "..."}]}],
+ "watch": [{"id": "scam-calls", "title": "...", "why": "Why it matters, cited [tickets-044].", "quotes": [{"item": "tickets-044", "text": "..."}]}],
  "footer": "Anything the reader should know about the evidence: a blocked connection, a partly covered window."}
 ```
 

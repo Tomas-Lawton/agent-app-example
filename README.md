@@ -12,6 +12,7 @@ Every company gets customer feedback: support tickets, surveys, issue trackers, 
 
 - **Up to three things to act on,** each with an owner and a **draft ticket** for the team, ready to copy into Jira, Linear or GitHub. Nothing is filed for you
 - **The main themes,** each with real quotes **and their sources**
+- **A watchlist** of rare but serious feedback (scams, harm, vulnerable customers, regulator complaints, anything your profile says always matters), shown even when there are only a few items
 - **What's new, growing or rising,** computed from real dates
 - **The numbers:** volume, ratings, items per day and per theme, all counted by code
 - **A feedback map:** every item placed near similar feedback, coloured by theme and shaped by source

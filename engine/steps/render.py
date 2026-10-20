@@ -53,6 +53,7 @@ def claims():
     out = []
     fields = [("headline", x.get("headline"))]
     fields += [(f"theme {t['id']}", t.get("summary")) for t in x.get("themes") or []]
+    fields += [(f"watch {w['id']}", w.get("why")) for w in x.get("watch") or []]
     for a in x.get("actions") or []:
         fields += [(f"action {a['theme']}", a.get("detail")), (f"ticket {a['theme']}", (a.get("ticket") or {}).get("body"))]
     for where, text in fields:
@@ -283,6 +284,20 @@ def body(preview, img):
             + f"<div style='{F}font-size:12px;color:{MUTED};margin-top:10px'>From {srcs}</div>",
             accent=KIND.get(s["kind"], BRAND)))
 
+    if x.get("watch"):
+        watch_by_id = {w["id"]: w for w in S.get("watch", [])}
+        rows.append(section("Watchlist", "Rare but serious: only a few items, but worth knowing about"))
+        for w in x["watch"]:
+            s = watch_by_id.get(w["id"], {})
+            srcs = "".join(f"{source_tag(k)}<span style='margin-right:8px'>{v}</span>" for k, v in (s.get("sources") or {}).items())
+            rows.append(card(
+                f"<div style='{F}font-size:16px;font-weight:700;color:{INK}'>{e(w['title'])}</div>"
+                f"<div style='{F}font-size:12px;color:{MUTED};margin-top:3px'>{s.get('count', 0)} item{'s' if s.get('count') != 1 else ''} &middot; From {srcs}</div>"
+                f"<div style='{F}font-size:14px;line-height:1.55;color:{INK};margin-top:8px'>{cite(w['why'])}</div>"
+                + label("interpretation", f"watch {w['id']}", len(set(checks.citations(w['why']))))
+                + "".join(quote(q) for q in w.get("quotes") or []),
+                accent="#b91c1c"))
+
     if x.get("actions"):
         rows.append(section("Things to act on", "Ranked by impact, reach and growth, each with a draft ticket for the owning team"))
         for n, a in enumerate(x["actions"], 1):
@@ -391,6 +406,9 @@ def text():
         s = themes_by_id[th["id"]]
         out += ["", f"* {th['title']} ({s['count']} items, {s['share']}%)", f"  {th['summary']}"]
         out += [f"  \"{q['text']}\" ({items.get(q['item'], {}).get('sourceLabel', '')})" for q in th["quotes"]]
+    for w in x.get("watch") or []:
+        out += ["", f"Watchlist: {w['title']}", f"  {w['why']}"]
+        out += [f"  \"{q['text']}\" ({items.get(q['item'], {}).get('sourceLabel', '')})" for q in w.get("quotes") or []]
     for a in x.get("actions") or []:
         tk = a.get("ticket") or {}
         out += ["", f"Draft ticket: {tk.get('title', '')}", tk.get("body", "")]
@@ -424,6 +442,13 @@ def markdown():
             it = items.get(q["item"], {})
             src = f"[{it.get('sourceLabel', '')}]({it['url']})" if it.get("url") else it.get("sourceLabel", "")
             out += [f"> \u201c{q['text']}\u201d", f"> \u2014 {src}, {it.get('date', '')}", ""]
+    if x.get("watch"):
+        out += ["## Watchlist", "*Rare but serious: only a few items, but worth knowing about.*", ""]
+        for w in x["watch"]:
+            out += [f"### {w['title']}", "", w["why"], ""]
+            for q in w.get("quotes") or []:
+                it = items.get(q["item"], {})
+                out += [f"> \u201c{q['text']}\u201d", f"> \u2014 {it.get('sourceLabel', '')}, {it.get('date', '')}", ""]
     if x.get("actions"):
         out += ["## Things to act on", ""]
         for n, a in enumerate(x["actions"], 1):

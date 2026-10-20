@@ -106,7 +106,7 @@ if prev_sum:
     change = {"items": totals["items"] - p["items"],
               "avgRating": None if None in (totals["avgRating"], p["avgRating"]) else round(totals["avgRating"] - p["avgRating"], 1),
               "lowShare": None if None in (totals["lowShare"], p["lowShare"]) else totals["lowShare"] - p["lowShare"]}
-kept_ids = {t["id"] for t in data["themes"] if t.get("decision") == "keep"}
+kept_ids = {t["id"] for t in data["themes"] if t.get("decision") in ("keep", "watch")}
 untagged = sum(1 for tids in tags.values() if not set(tids) & kept_ids)
 kept = sorted((t for t in data["themes"] if t.get("decision") == "keep"), key=lambda t: -t["computed"]["score"])
 summary = {
@@ -117,6 +117,8 @@ summary = {
     "themes": [{"id": t["id"], "title": t["title"], "kind": t.get("kind"),
                 **{k: t["computed"][k] for k in ("count", "share", "avgRating", "lowShare", "trend", "firstHalf", "secondHalf", "previousShare", "score", "sources")}}
                for t in kept],
+    "watch": [{"id": t["id"], "title": t["title"], "kind": t.get("kind"), **{k: t["computed"][k] for k in ("count", "share", "trend", "sources")}}
+              for t in data["themes"] if t.get("decision") == "watch"],
     "sources": {st: sum(e["status"] == st for e in log["sources"]) for st in ("ok", "blocked", "error")},
     "connections": [{k: e.get(k) for k in ("id", "label", "type", "status", "kept", "collected", "private", "link", "reason", "note")} for e in log["sources"]],
 }
