@@ -48,9 +48,6 @@
     "warehouse": {
       "label": "Internal warehouse or data store: a table or view where your company already collects feedback (support tickets, surveys, in-app feedback)",
       "access": "read only, one named table or view",
-      "engines": [
-        "bigquery"
-      ],
       "needs": [
         "the project, dataset and table or view",
         "which columns hold the date and the text (and optionally an id, title, rating and link)",
@@ -89,8 +86,7 @@
     "maxUntaggedShare": 25
   },
   "send": {
-    "maxRecipients": 1,
-    "requireChecks": true
+    "maxRecipients": 1
   },
   "cluster": {
     "k": 6,

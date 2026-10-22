@@ -219,20 +219,6 @@ def grid(boxes):
     return "".join(rows)
 
 
-def split(left, right):
-    """Two cards stacked on the left, one card on the right that stretches to the full height (stacks on a phone)."""
-    stack = "".join(
-        f"<div style='{box_style(b['accent'])};margin-top:{16 if n else 0}px'>{b['inner']}</div>"
-        for n, b in enumerate(left)
-    )
-    return (
-        f"<tr><td style='padding:8px 24px'><table role='presentation' width='100%' cellpadding='0' cellspacing='0'><tr>"
-        f"<td class='col' width='49%' valign='top' style='padding:0'>{stack}</td>"
-        f"<td class='gap' width='2%' style='font-size:0;line-height:0'>&nbsp;</td>"
-        f"<td class='col' width='49%' valign='top' style='{box_style(right['accent'])}'>{right['inner']}</td></tr></table></td></tr>"
-    )
-
-
 def section(title, sub=""):
     sub = f"<div style='{F}font-size:13px;color:{MUTED};margin-top:4px'>{sub}</div>" if sub else ""
     return (
@@ -285,9 +271,7 @@ def cite(text):
 
 
 def label(kind, where=None, n=0):
-    """Small labels that show which parts code checked and which are the agent's reading."""
-    if kind == "checked":
-        return f"<span style='{F}font-size:11px;color:#15803d;font-weight:600'>&#10003; Word for word, checked against the source</span>"
+    """The small line under the agent's writing: its interpretation, how many items it cites, and whether verified."""
     tick = " &middot; <span style='color:#15803d'>&#10003; claims verified</span>" if where and verified(where) else ""
     return f"<div style='{F}font-size:11px;color:{MUTED};margin-top:4px;font-style:italic'>Agent's interpretation &middot; cites {n} item{'s' if n != 1 else ''}{tick}</div>"
 
@@ -302,20 +286,6 @@ def quote(q):
         f"<div style='background:{BG};border-radius:10px;padding:10px 14px;margin:10px 0 0'>"
         f"<div style='{F}font-size:14px;line-height:1.55;color:{INK}'>&ldquo;{e(q['text'])}&rdquo;</div>"
         f"<div style='{F}font-size:12px;color:{MUTED};margin-top:4px'>{meta}{link}</div></div>"
-    )
-
-
-def ticket(a, preview):
-    tk = a.get("ticket") or {}
-    if not tk:
-        return ""
-    return (
-        f"<div style='background:{TINT};border-radius:10px;padding:10px 12px;margin-top:10px'>"
-        f"<div style='{F}font-size:11px;color:{MUTED};text-transform:uppercase;letter-spacing:.5px'>Draft ticket, not filed</div>"
-        f"<div style='{F}font-size:14px;font-weight:700;color:{INK};margin-top:3px'>{e(tk.get('title'))}</div>"
-        f"<div style='{F}font-size:13px;line-height:1.55;color:{INK};margin-top:4px'>{e(tk.get('issue'))}</div>"
-        f"<div style='{F}font-size:12px;color:{MUTED};margin-top:4px'>Feedback: {cite('[' + ', '.join(tk.get('items') or []) + ']')}</div>"
-        f"{ticket_buttons(tk, preview)}</div>"
     )
 
 

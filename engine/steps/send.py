@@ -8,11 +8,9 @@ from core import config, checks
 
 ap = argparse.ArgumentParser()
 ap.add_argument("key")
-ap.add_argument("--to")
-ap.add_argument("--dry-run", action="store_true")
 a = ap.parse_args()
 cfg, info = config.open_run(a.key)
-to = a.to or cfg["recipient"]
+to = cfg["recipient"]
 
 if to not in cfg["userScope"]["recipients"][: cfg["scope"]["send"]["maxRecipients"]]:
     sys.exit(
@@ -45,8 +43,6 @@ del m["From"]
 del m["To"]
 m["From"] = formataddr((cfg.get("wording", {}).get("title", "Customer Pulse"), sender))
 m["To"] = to
-if a.dry_run:
-    sys.exit(f"dry run: would send \"{m['Subject']}\" from {sender} to {to} via {host}:{port}")
 ctx = ssl.create_default_context()
 with (
     smtplib.SMTP_SSL(host, port, context=ctx, timeout=30) if port == 465 else smtplib.SMTP(host, port, timeout=30)

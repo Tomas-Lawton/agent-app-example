@@ -73,7 +73,7 @@ def build_sql(src, limit):
     )
 
 
-def fetch(src, since, limit, timeout=30, max_bytes=1_000_000_000, dry_run=False):
+def fetch(src, since, limit, timeout=30, max_bytes=1_000_000_000):
     if src.get("engine", "bigquery") != "bigquery":
         raise NotAllowed(f"warehouse engine `{src.get('engine')}` is not supported")
     sql = build_sql(src, limit)
@@ -87,7 +87,6 @@ def fetch(src, since, limit, timeout=30, max_bytes=1_000_000_000, dry_run=False)
         "timeoutMs": timeout * 1000,
         "maximumBytesBilled": str(int(max_bytes)),
         "maxResults": 1000,
-        "dryRun": dry_run,
         "queryParameters": [{"name": "since", "parameterType": {"type": "DATE"}, "parameterValue": {"value": since}}],
     }
     if src.get("location"):
@@ -98,8 +97,6 @@ def fetch(src, since, limit, timeout=30, max_bytes=1_000_000_000, dry_run=False)
         if r["_error"] in (401, 403):
             raise Blocked(f"BigQuery refused access ({r['_error']}): {r['_body'][:200]}")
         raise RuntimeError(f"BigQuery error {r['_error']}: {r['_body'][:300]}")
-    if dry_run:
-        return [], {"dryRun": True, "bytes": int(r.get("totalBytesProcessed", 0)), "sql": sql}
     ref = r.get("jobReference", {})
     deadline = time.time() + timeout
     while not r.get("jobComplete"):
