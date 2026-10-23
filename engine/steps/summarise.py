@@ -13,9 +13,7 @@ if not os.path.exists("themes.json"):
 data = json.load(open("themes.json"))
 
 tags = {}
-for p in ["tags/carried.json"] + sorted(glob.glob("tags/part_*.json")):  # this run's tags override carried ones
-    if not os.path.exists(p):
-        continue
+for p in sorted(glob.glob("tags/part_*.json")):
     for iid, tids in json.load(open(p)).items():
         tags[iid] = [tids] if isinstance(tids, str) else list(tids or [])
 missing = [i for i in by_id if i not in tags]
@@ -26,13 +24,9 @@ if missing:
     )
 
 N = len(items) or 1
-meta = json.load(open("items.json"))
-window = (
-    json.load(open("window.json")) if os.path.exists("window.json") else items
-)  # everything collected in the window
+capped = json.load(open("items.json")).get("capped", False)
 since, until = datetime.date.fromisoformat(info["since"]), datetime.date.fromisoformat(info["until"])
-covered = max(since, datetime.date.fromisoformat(meta.get("coverageFrom") or info["since"]))  # the dates the agent read
-mid = covered + (until - covered) / 2  # trends inside the run compare halves of the covered dates, never empty days
+mid = since + (until - since) / 2  # trends compare the two halves of the window
 
 
 def five(it):
@@ -48,31 +42,13 @@ def stats(lst):
     }
 
 
-prev, prev_sum = None, None
-if info.get("previous"):
-    d = os.path.join(config.ROOT, info["previous"])
-    if os.path.exists(os.path.join(d, "themes.json")):
-        prev = {
-            t["id"]: t["computed"]
-            for t in json.load(open(os.path.join(d, "themes.json")))["themes"]
-            if t.get("decision") == "keep" and t.get("computed")
-        }
-    if os.path.exists(os.path.join(d, "summary.json")):
-        prev_sum = json.load(open(os.path.join(d, "summary.json")))
-
-
-def trend(tid, ids, share):
-    """Rising inside this window (second half against first), and new or growing against the previous run."""
+def trend(ids):
+    """Rising or easing inside this window: the second half of the window against the first."""
     first = sum(1 for i in ids if datetime.date.fromisoformat(by_id[i]["date"]) <= mid)
     second = len(ids) - first
-    rising = second >= 3 and second >= 1.5 * max(first, 1)
-    if prev is not None and tid not in prev:
-        return "new", 2 if share >= 4 else 1, first, second
-    if prev is not None and share - prev[tid]["share"] >= max(5, prev[tid]["share"] * 0.5):
-        return "growing", 2, first, second
-    if rising:
+    if second >= 3 and second >= 1.5 * max(first, 1):
         return "rising", 1, first, second
-    if prev is not None and prev[tid]["share"] - share >= max(5, prev[tid]["share"] * 0.5):
+    if first >= 3 and first >= 1.5 * max(second, 1):
         return "easing", 0, first, second
     return "steady", 0, first, second
 
@@ -81,14 +57,12 @@ for t in data.get("themes", []):
     ids = [i for i, tids in tags.items() if t.get("id") in tids and i in by_id]
     share = round(100 * len(ids) / N, 1)
     breadth = 3 if share >= 20 else 2 if share >= 10 else 1 if share >= 4 else 0
-    tr, growth, first, second = trend(t.get("id"), ids, share)
+    tr, growth, first, second = trend(ids)
     sc = t.get("scores") or {}
     impact, act = min(max(int(sc.get("impact", 0) or 0), 0), 3), min(max(int(sc.get("actionability", 0) or 0), 0), 2)
-    per, days = {}, {}
+    per = {}
     for i in ids:
         per[by_id[i]["source"]] = per.get(by_id[i]["source"], 0) + 1
-        days[by_id[i]["date"]] = days.get(by_id[i]["date"], 0) + 1
-    peak = max(days.items(), key=lambda kv: (kv[1], kv[0])) if days else (None, 0)
     t["computed"] = {
         **stats([by_id[i] for i in ids]),
         "count": len(ids),
@@ -97,10 +71,6 @@ for t in data.get("themes", []):
         "firstHalf": first,
         "secondHalf": second,
         "trend": tr,
-        "firstSeen": min(days) if days else None,
-        "peakDay": peak[0],
-        "peakCount": peak[1],
-        "previousShare": None if prev is None else (prev.get(t.get("id")) or {}).get("share", 0),
         "breadth": breadth,
         "growth": growth,
         "score": impact + act + breadth + growth,
@@ -111,21 +81,17 @@ json.dump(data, open("themes.json", "w"), indent=2, ensure_ascii=False)
 daily = []
 for n in range((until - since).days + 1):
     d = (since + datetime.timedelta(days=n)).isoformat()
-    day = [i for i in window if i["date"] == d]
+    day = [i for i in items if i["date"] == d]
     daily.append({"date": d, "count": len(day), "avgRating": stats(day)["avgRating"]})
-totals = {"items": len(window), "analysed": len(items), **stats(window)}
-stars = [round(five(i)) for i in window if five(i) is not None]  # every rated item in the window, on a 1 to 5 scale
-rating_mix = {str(s): sum(1 for r in stars if max(1, min(5, r)) == s) for s in range(5, 0, -1)} if stars else None
-change = None
-if prev_sum:
-    p = prev_sum["totals"]
-    change = {
-        "items": totals["items"] - p["items"],
-        "avgRating": (
-            None if None in (totals["avgRating"], p["avgRating"]) else round(totals["avgRating"] - p["avgRating"], 1)
-        ),
-        "lowShare": None if None in (totals["lowShare"], p["lowShare"]) else totals["lowShare"] - p["lowShare"],
-    }
+totals = {"items": len(items), **stats(items)}
+
+
+def counted(t, fields):
+    """A theme as summary.json shows it: its name and kind, with the numbers code counted."""
+    return {"id": t["id"], "title": t["title"], "kind": t.get("kind"), **{k: t["computed"][k] for k in fields}}
+
+
+THEME_FIELDS = ("count", "share", "avgRating", "lowShare", "trend", "firstHalf", "secondHalf", "score", "sources")
 kept_ids = {t["id"] for t in data["themes"] if t.get("decision") in ("keep", "watch")}
 untagged = sum(1 for tids in tags.values() if not set(tids) & kept_ids)
 kept = sorted((t for t in data["themes"] if t.get("decision") == "keep"), key=lambda t: -t["computed"]["score"])
@@ -133,57 +99,16 @@ summary = {
     "date": info["date"],
     "window": {"since": info["since"], "until": info["until"], "label": info["windowLabel"]},
     "totals": totals,
-    "capped": meta.get("capped", False),
-    "ratingMix": rating_mix,
-    "coverage": {"from": covered.isoformat(), "until": info["until"], "analysed": len(items), "collected": len(window)},
+    "capped": capped,
     "untaggedShare": round(100 * untagged / N),
-    "previous": prev_sum["date"] if prev_sum else None,
-    "change": change,
     "daily": daily,
-    "themes": [
-        {
-            "id": t["id"],
-            "title": t["title"],
-            "kind": t.get("kind"),
-            **{
-                k: t["computed"][k]
-                for k in (
-                    "count",
-                    "share",
-                    "avgRating",
-                    "lowShare",
-                    "trend",
-                    "firstHalf",
-                    "secondHalf",
-                    "previousShare",
-                    "score",
-                    "sources",
-                    "firstSeen",
-                    "peakDay",
-                    "peakCount",
-                )
-            },
-            "impact": (t.get("scores") or {}).get("impact"),
-            "actionability": (t.get("scores") or {}).get("actionability"),
-        }
-        for t in kept
-    ],
+    "themes": [counted(t, THEME_FIELDS) for t in kept],
     "watch": [
-        {
-            "id": t["id"],
-            "title": t["title"],
-            "kind": t.get("kind"),
-            **{k: t["computed"][k] for k in ("count", "share", "trend", "sources")},
-        }
-        for t in data["themes"]
-        if t.get("decision") == "watch"
+        counted(t, ("count", "share", "trend", "sources")) for t in data["themes"] if t.get("decision") == "watch"
     ],
     "sources": {st: sum(e["status"] == st for e in log["sources"]) for st in ("ok", "blocked", "error")},
     "connections": [
-        {
-            k: e.get(k)
-            for k in ("id", "label", "type", "status", "kept", "collected", "private", "link", "reason", "note")
-        }
+        {k: e.get(k) for k in ("id", "label", "type", "status", "kept", "private", "link", "reason", "note")}
         for e in log["sources"]
     ],
 }
