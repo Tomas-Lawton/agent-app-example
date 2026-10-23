@@ -28,13 +28,13 @@ The [setup skill](setup/SKILL.md) asks a few questions, connects your feedback s
 <td width="50%" valign="top">
 
 **Things to act on**<br/>
-Up to three actions, each with an owner and a draft ticket you can open pre-filled in GitHub, Linear or Jira.
+Up to three actions, each with an owner and a draft ticket for the team.
 
 </td>
 <td width="50%" valign="top">
 
 **What customers are saying**<br/>
-The main themes, with quotes and sources, when each started and peaked, and who is affected.
+The main themes, with quotes and sources.
 
 </td>
 </tr>
@@ -56,7 +56,7 @@ What customers praise.
 <td valign="top">
 
 **Numbers and charts**<br/>
-Volume, ratings, trends, a priority matrix and a map of similar feedback, all counted by code.
+Volume, ratings, items per theme and trends, all counted by code.
 
 </td>
 <td valign="top">
@@ -104,8 +104,7 @@ title: Customer Voice
 reader: Head of Customer Experience
 time window: 7
 output: both
-colours: brand #0b2545, brand2 #13315c, accent #c9a227, tint #eef2f8
-tickets: github capital-bank/cx-feedback
+colours: brand #0b2545, brand2 #13315c, accent #c9a227
 ---
 Lead with anything that stops customers paying or logging in. Always surface scam reports.
 ```
@@ -120,9 +119,9 @@ Optional images (`logo.png`, `header.png`) go in `profiles/<key>/assets/`.
 | Script | What it does |
 |---|---|
 | [`steps/collect.py`](engine/steps/collect.py) | Reads every connection, removes personal details and duplicates, keeps the newest 500 items |
-| [`steps/cluster.py`](engine/steps/cluster.py) | Groups similar items for reading and lays out the map |
+| [`steps/cluster.py`](engine/steps/cluster.py) | Groups similar items for reading |
 | [`steps/summarise.py`](engine/steps/summarise.py) | Checks tagging and quotes, counts themes, computes trends |
-| [`steps/render.py`](engine/steps/render.py) | Checks the writing and builds the pulse, preview, email and charts |
+| [`steps/render.py`](engine/steps/render.py) | Checks the writing and builds the pulse (one page for the email and the preview) and a short chat summary |
 | [`steps/send.py`](engine/steps/send.py) | The send gate: reruns every check and emails only the approved recipient |
 | [`core/config.py`](engine/core/config.py) | Reads the scope and profile; refuses anything beyond the use case |
 | [`core/checks.py`](engine/core/checks.py) | Every check on the agent's files |

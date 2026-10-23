@@ -10,8 +10,7 @@ ENGINE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ROOT = os.path.dirname(ENGINE)
 
 PLAIN_NAME = re.compile(r"^[A-Za-z0-9_-]+$")
-PROFILE_SETTINGS = {"product", "title", "reader", "time window", "output", "icon", "colours", "tickets", "agent link"}
-TRACKERS = ("github", "linear", "jira")
+PROFILE_SETTINGS = {"product", "title", "reader", "time window", "output", "colours"}
 OUTPUTS = ("chat", "email", "both")
 
 
@@ -78,14 +77,12 @@ def profile(key):
 
     window = raw.get("time window", "7").split()[0]
     settings = {
-        "product": {"name": raw.get("product", key), "iconUrl": raw.get("icon") or None},
+        "product": raw.get("product", key),
         "reader": raw.get("reader", ""),
         "windowDays": int(window) if window.isdigit() else 7,
         "delivery": (raw.get("output") or "both").lower(),
         "wording": {"title": raw.get("title", "Customer Pulse")},
         "theme": colours,
-        "tickets": raw.get("tickets", "").split(),
-        "agentLink": raw.get("agent link") or None,
     }
     return raw, settings
 
@@ -94,17 +91,6 @@ def profile_problems(settings, raw):
     problems = []
     if settings["delivery"] not in OUTPUTS:
         problems.append("PROFILE.md `output` must be chat, email or both")
-    tickets = settings["tickets"]
-    if tickets:
-        tracker = tickets[0].lower()
-        needed = 3 if tracker == "jira" else 2
-        if tracker not in TRACKERS or len(tickets) < needed:
-            problems.append(
-                "PROFILE.md `tickets` must be `github owner/repo`, `linear TEAM` "
-                "or `jira https://site.atlassian.net <project id>`"
-            )
-    if settings["agentLink"] and not settings["agentLink"].startswith("https://"):
-        problems.append("PROFILE.md `agent link` must be an https address")
     for name in sorted(set(raw) - PROFILE_SETTINGS):
         problems.append(
             f"PROFILE.md sets `{name}`, which is not a profile setting "
@@ -145,7 +131,7 @@ def service_problems(source, rules):
                 "and `idEnv` and `secretEnv` naming values in .env"
             )
     else:
-        allowed = {"type", "env", "header", "param", "optional"}
+        allowed = {"type", "env", "optional"}
         if (
             auth.get("type") not in rules["authTypes"]
             or not PLAIN_NAME.match(str(auth.get("env", "")))
@@ -257,12 +243,6 @@ def start_run(key):
     today = now.date()
     since = today - datetime.timedelta(days=cfg["windowDays"] - 1)
 
-    previous = None
-    for folder in reversed(run_folders(key)):
-        if os.path.basename(folder) < today.isoformat() and os.path.exists(os.path.join(folder, "summary.json")):
-            previous = os.path.relpath(folder, ROOT)
-            break
-
     run = os.path.join(ROOT, "runs", key, today.isoformat())
     os.makedirs(os.path.join(run, "out"), exist_ok=True)
     info = {
@@ -272,7 +252,6 @@ def start_run(key):
         "since": since.isoformat(),
         "until": today.isoformat(),
         "windowLabel": f"{since.day} {since:%b} to {today.day} {today:%b} {today.year}",
-        "previous": previous,
         "folder": os.path.relpath(run, ROOT),
         "startedAt": now.isoformat(timespec="seconds"),
     }

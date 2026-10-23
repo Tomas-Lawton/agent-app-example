@@ -1,7 +1,7 @@
 import os, sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # engine/
-import base64, datetime, glob, hashlib, html, json, urllib.parse
+import datetime, hashlib, html, json, shutil
 from email.message import EmailMessage
 from email.utils import format_datetime, make_msgid
 from core import config, checks
@@ -11,11 +11,6 @@ errors = checks.run(cfg, info, "plan", "content")
 if errors:
     sys.exit("FIX plan.json or live_content.json, then run render.py again:\n  " + "\n  ".join(errors))
 x = json.load(open("live_content.json"))
-for a in x.get("actions") or []:  # a ticket is a title, the issue, and the items it rests on (listed at the end)
-    tk = a.get("ticket") or {}
-    if "issue" not in tk and tk.get("body"):
-        tk["items"] = tk.get("items") or checks.citations(tk["body"])
-        tk["issue"] = checks.CITE.sub("", tk["body"]).replace(" .", ".").strip()
 for entry in (x.get("themes") or []) + (x.get("watch") or []):  # a quote's words may be under "text" or "quote"
     for q in entry.get("quotes") or []:
         q.setdefault("text", q.get("quote", ""))
@@ -25,54 +20,55 @@ conns = {c["id"]: c for c in S.get("connections", [])}
 TH = cfg.get("theme") or {}
 BRAND, ACCENT = TH.get("brand", "#1f3a5f"), TH.get("accent", "#e07a2f")
 BRAND2 = TH.get("brand2", ACCENT)
-INK, MUTED, LINE, BG = (
-    TH.get("ink", "#111827"),
-    TH.get("muted", "#6b7280"),
-    TH.get("line", "#e5e7eb"),
-    TH.get("background", "#f5f6f8"),
-)
-TINT = TH.get("tint", "#e9efe9")
+INK, MUTED = TH.get("ink", "#111827"), TH.get("muted", "#6b7280")
+LINE, BG = TH.get("line", "#e5e7eb"), TH.get("background", "#f5f6f8")
 KIND = {
     "problem": TH.get("problem", "#c2410c"),
     "request": TH.get("request", "#2563eb"),
     "praise": TH.get("praise", "#15803d"),
     "question": TH.get("question", "#7c3aed"),
 }
-TREND = {
-    "new": ("New", ACCENT),
-    "growing": ("Growing", ACCENT),
-    "rising": ("Rising this period", ACCENT),
-    "easing": ("Easing", "#15803d"),
-}
+TREND = {"rising": ("Rising this period", ACCENT), "easing": ("Easing", "#15803d")}
 NAME = cfg.get("wording", {}).get("title", "Customer Pulse")
-PRODUCT = cfg.get("product", {})
+PRODUCT = cfg.get("product", "")
 F = "font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Arial,Helvetica,sans-serif;"  # no quotes: styles sit in single quoted attributes
 e = lambda s: html.escape(str(s if s is not None else ""))
 themes_by_id = {t["id"]: t for t in S["themes"]}
-PALETTE = [BRAND, ACCENT, "#c2410c", "#7c3aed", "#15803d", "#0891b2", "#be185d", "#4d7c0f"]
-THEME_COLOUR = {
-    th["id"]: PALETTE[n % len(PALETTE)] for n, th in enumerate(x["themes"])
-}  # the same colour and number on every chart
-kept_themes = {t["id"]: t for t in json.load(open("themes.json"))["themes"] if t.get("decision") == "keep"}
 CITED = []  # item ids in order of first citation, numbered [1], [2] ... across the pulse
+SRC_COLOURS = ["#334155", "#0f766e", "#9333ea", "#b45309", "#be123c"]
+SRC_COLOUR = {c["id"]: SRC_COLOURS[n % 5] for n, c in enumerate(S.get("connections", []))}
 
 
-def claims():
-    """Every sentence the agent wrote with citations, with the text of the items it cites, for the verifier."""
-    out = []
+def item_text(i):
+    it = items.get(i, {})
+    return ((it.get("title") or "") + " " + it.get("text", "")).strip()
+
+
+def claim_fields():
+    """Every piece of the agent's writing that carries citations, labelled by where it sits in the pulse."""
     fields = [("headline", x.get("headline"))]
     fields += [(f"theme {t['id']}", t.get("summary")) for t in x.get("themes") or []]
-    fields += [(f"theme {t['id']}", t.get("who")) for t in x.get("themes") or [] if t.get("who")]
     fields += [(f"watch {w['id']}", w.get("why")) for w in x.get("watch") or []]
     for entry in (x.get("themes") or []) + (x.get("watch") or []):  # each quote must be a clear example of its theme
         for q in entry.get("quotes") or []:
-            fields.append((f"quote {entry['id']}", f'This feedback is a clear example of "{entry.get("title", "")}" [{q["item"]}].'))
+            fields.append(
+                (
+                    f"quote {entry['id']}",
+                    f'This feedback is a clear example of "{entry.get("title", "")}" [{q["item"]}].',
+                )
+            )
     for a in x.get("actions") or []:
         fields.append((f"action {a['theme']}", a.get("detail")))  # optional
         tk = a.get("ticket") or {}
         if tk.get("issue") and tk.get("items"):
             fields.append((f"ticket {a['theme']}", f"{tk['issue']} [{', '.join(tk['items'])}]"))
-    for where, text in fields:
+    return fields
+
+
+def claims():
+    """Every sentence the agent wrote with citations, with the text of the items it cites, for the verifier."""
+    out = []
+    for where, text in claim_fields():
         for sentence in checks.sentences(text):
             ids = checks.citations(sentence)
             if ids:
@@ -82,15 +78,7 @@ def claims():
                         "id": hashlib.sha1(f"{where}|{plain}".encode()).hexdigest()[:10],
                         "where": where,
                         "claim": plain,
-                        "cited": [
-                            {
-                                "id": i,
-                                "text": (
-                                    (items.get(i, {}).get("title") or "") + " " + items.get(i, {}).get("text", "")
-                                ).strip(),
-                            }
-                            for i in ids
-                        ],
+                        "cited": [{"id": i, "text": item_text(i)} for i in ids],
                     }
                 )
     return out
@@ -101,13 +89,6 @@ VERDICTS = json.load(open("verdicts.json")) if os.path.exists("verdicts.json") e
 verified = lambda where: bool(VERDICTS) and all(
     VERDICTS.get(c["id"], {}).get("supported") for c in CLAIMS if c["where"] == where
 )
-SRC_COLOURS = ["#334155", "#0f766e", "#9333ea", "#b45309", "#be123c"]
-SRC_MARKERS = ["o", "^", "s", "D", "P"]
-SRC_SYMBOLS = ["&#9679;", "&#9650;", "&#9632;", "&#9670;", "&#10010;"]  # the same shapes, for the html
-SRC_STYLE = {
-    c["id"]: (SRC_COLOURS[n % 5], SRC_MARKERS[n % 5], SRC_SYMBOLS[n % 5])
-    for n, c in enumerate(S.get("connections", []))
-}
 
 
 # ---------------------------------------------------------------- pieces
@@ -126,57 +107,25 @@ def pill(text, colour, solid=False):
     )
 
 
-def agent_link():
-    """Where the reader continues: this conversation's own link if the agent has it, else the profile's agent link."""
-    session = x.get("session") or {}
-    if session.get("url"):
-        return session["url"], "Continue in your agent"
-    if cfg.get("agentLink"):
-        return cfg["agentLink"], "Open your agent"
-    return None
-
-
-def link_button(href, label):
-    """A plain link styled as a button: works in every email client, unlike scripts."""
-    blank = " target='_blank' rel='noopener'" if href.startswith("https://") else ""
-    return (
-        f"<a href='{e(href)}'{blank} style='display:inline-block;{F}font-size:13px;font-weight:600;color:{BRAND};background:#ffffff;"
-        f"border:1px solid {BRAND};border-radius:8px;padding:7px 12px;margin:6px 6px 0 0;text-decoration:none'>{e(label)}</a>"
-    )
-
-
-def create_link(title, body):
-    """A link that opens a new ticket in the profile's tracker with the title and description filled in.
-    Nothing is filed: the reader reviews it and presses Create."""
-    tk, q = cfg.get("tickets") or [], urllib.parse.quote
-    body = body[:1500]
-    if not tk:
-        return None
-    kind = tk[0].lower()
-    if kind == "github":
-        return f"https://github.com/{tk[1]}/issues/new?title={q(title)}&body={q(body)}", "Create GitHub issue"
-    if kind == "linear":
-        return f"https://linear.new?team={q(tk[1])}&title={q(title)}&description={q(body)}", "Create Linear issue"
-    return (
-        f"{tk[1].rstrip('/')}/secure/CreateIssueDetails!init.jspa?pid={q(tk[2])}&issuetype={q(tk[3] if len(tk) > 3 else '10001')}"
-        f"&summary={q(title)}&description={q(body)}"
-    ), "Create Jira issue"
-
-
-def copy_button(text, preview, label="Copy"):
-    if not preview:
-        return ""
-    return (
-        f"<button onclick='copyText(this)' data-t='{e(text)}' "
-        f"style='{F}font-size:13px;font-weight:600;color:#fff;background:{BRAND};border:0;border-radius:8px;padding:8px 12px;"
-        f"margin:6px 6px 0 0;cursor:pointer'>{e(label)}</button>"
-    )
-
-
 def source_label(sid):
     c = conns.get(sid, {})
     label = e(c.get("label") or sid)
     return f"<a href='{e(c['link'])}' style='color:{BRAND}'>{label}</a>" if c.get("link") else label
+
+
+def source_tag(sid):
+    """A small coloured tag naming the connection."""
+    colour = SRC_COLOUR.get(sid, "#334155")
+    return (
+        f"<span style='display:inline-block;{F}font-size:11px;font-weight:600;color:{colour};background:#ffffff;"
+        f"border:1px solid {colour};border-radius:999px;padding:1px 8px;margin-right:6px'>{source_label(sid)}</span>"
+    )
+
+
+def source_counts(s):
+    return "".join(
+        f"{source_tag(k)}<span style='margin-right:8px'>{v}</span>" for k, v in (s.get("sources") or {}).items()
+    )
 
 
 def box_style(accent=None):
@@ -191,12 +140,8 @@ def box(inner, accent=None):
     return {"inner": inner, "accent": accent}  # drawn by full() or grid()
 
 
-def _div(b):
-    return f"<div style='{box_style(b['accent'])}'>{b['inner']}</div>"
-
-
 def full(b):
-    return f"<tr><td style='padding:8px 24px'>{_div(b)}</td></tr>"
+    return f"<tr><td style='padding:8px 24px'><div style='{box_style(b['accent'])}'>{b['inner']}</div></td></tr>"
 
 
 def card(inner, accent=None):
@@ -236,26 +181,6 @@ def stat(label, value, sub=""):
     )
 
 
-def delta(v, unit="", better="up"):
-    if v is None:
-        return "first edition"
-    if v == 0:
-        return "no change"
-    good = (v > 0) == (better == "up")
-    return (
-        f"<span style='color:{'#15803d' if good else '#c2410c'}'>{'+' if v > 0 else ''}{v:g}{unit} vs last run</span>"
-    )
-
-
-def source_tag(sid):
-    """A small coloured tag naming the connection, with the same shape it has on the map."""
-    colour, _, symbol = SRC_STYLE.get(sid, ("#334155", "o", "&#9679;"))
-    return (
-        f"<span style='display:inline-block;{F}font-size:11px;font-weight:600;color:{colour};background:#ffffff;"
-        f"border:1px solid {colour};border-radius:999px;padding:1px 8px;margin-right:6px'>{symbol} {source_label(sid)}</span>"
-    )
-
-
 def cite(text):
     """Escape the agent's text and turn its citations into numbered links to the evidence list."""
 
@@ -270,9 +195,9 @@ def cite(text):
     return checks.CITE.sub(link, e(text))
 
 
-def label(kind, where=None, n=0):
+def label(where, n):
     """The small line under the agent's writing: its interpretation, how many items it cites, and whether verified."""
-    tick = " &middot; <span style='color:#15803d'>&#10003; claims verified</span>" if where and verified(where) else ""
+    tick = " &middot; <span style='color:#15803d'>&#10003; claims verified</span>" if verified(where) else ""
     return f"<div style='{F}font-size:11px;color:{MUTED};margin-top:4px;font-style:italic'>Agent's interpretation &middot; cites {n} item{'s' if n != 1 else ''}{tick}</div>"
 
 
@@ -289,8 +214,8 @@ def quote(q):
     )
 
 
-def action_ticket(a, preview):
-    """An action is its draft ticket: title, the issue, who owns it, the feedback it rests on, and buttons."""
+def action_ticket(a):
+    """An action is its draft ticket: title, the issue, who owns it and the feedback it rests on."""
     tk = a.get("ticket") or {}
     refs = cite("[" + ", ".join(tk.get("items") or []) + "]") if tk.get("items") else ""
     return (
@@ -299,77 +224,10 @@ def action_ticket(a, preview):
         f"<div style='{F}font-size:16px;font-weight:700;color:{INK};margin-top:3px'>{e(tk.get('title') or a.get('title'))}</div>"
         f"<div style='{F}font-size:14px;line-height:1.55;color:{INK};margin-top:4px'>{e(tk.get('issue'))}</div>"
         f"<div style='{F}font-size:12px;color:{MUTED};margin-top:6px'>Feedback: {refs}</div>"
-        f"{ticket_buttons(tk, preview)}"
     )
 
 
-def ticket_buttons(tk, preview):
-    title, body = tk.get("title", ""), ticket_text(tk)
-    out = copy_button(title + chr(10) + chr(10) + body, preview, "Copy ticket")
-    made = create_link(title, body)
-    if made:
-        out += link_button(*made)
-    return out + link_button(email_link(title, body[:1500], preview), "Email this")
-
-
-def email_link(subject, body, preview):
-    """In an email, mailto opens a reply in the reader's own mail client. A browser often has no mail app set up for
-    mailto, so the preview opens the compose page of the sending account's webmail instead (from SMTP_HOST, not a secret).
-    """
-    q, host = urllib.parse.quote, (config.env("SMTP_HOST") or "").lower()
-    if preview and "gmail" in host:
-        return f"https://mail.google.com/mail/?view=cm&fs=1&su={q(subject)}&body={q(body)}"
-    if preview and ("office365" in host or "outlook" in host):
-        return f"https://outlook.office.com/mail/deeplink/compose?subject={q(subject)}&body={q(body)}"
-    return f"mailto:?subject={q(subject)}&body={q(body)}"
-
-
-def ticket_text(tk):
-    """The ticket as plain text: the issue, then the feedback it rests on, each with its source, date and link."""
-    lines = [tk.get("issue", ""), "", "Feedback:"]
-    for i in tk.get("items") or []:
-        it = items.get(i, {})
-        lines.append(f"- {it.get('sourceLabel', i)} {it.get('date', '')}" + (f" {it['url']}" if it.get("url") else f" ({i})"))
-    return "\n".join(lines)
-
-
-# ---------------------------------------------------------------- the pulse
-def sources_chart():
-    """Items from each connection: where this period's feedback came from."""
-    conns = [c for c in S.get("connections", []) if c.get("status") == "ok"]
-    counts = {c["id"]: c.get("collected", c.get("kept", 0)) for c in conns}
-    total = sum(counts.values()) or 1
-    rows = "".join(
-        f"<tr><td width='45%' style='{F}font-size:12px;color:{INK};padding:3px 8px 3px 0'>{source_tag(c['id'])}{e(c.get('label') or c['id'])}</td>"
-        f"<td style='padding:3px 0'><div style='width:{max(2, round(100 * counts[c['id']] / total))}%;height:12px;border-radius:6px;background:{BRAND2}'></div></td>"
-        f"<td width='44' align='right' style='{F}font-size:12px;color:{MUTED}'>{counts[c['id']]}</td></tr>"
-        for c in conns
-    )
-    return (
-        f"<div style='{F}font-size:13px;font-weight:600;color:{INK};margin:0 0 8px'>Where it came from</div>"
-        f"<table role='presentation' width='100%' cellpadding='0' cellspacing='0'>{rows}</table>"
-    )
-
-
-def mix_chart():
-    """How ratings are spread across the window, 5 stars to 1: an average can hide a split between love and hate."""
-    mix = S.get("ratingMix")
-    if not mix or not sum(mix.values()):
-        return ""
-    total, colour = sum(mix.values()), {"5": "#15803d", "4": "#65a30d", "3": "#ca8a04", "2": "#ea580c", "1": "#b91c1c"}
-    rows = "".join(
-        f"<tr><td width='34' style='{F}font-size:12px;color:{INK};padding:3px 6px 3px 0'>{s}&#9733;</td>"
-        f"<td style='padding:3px 0'><div style='width:{max(2, round(100 * n / total))}%;height:12px;border-radius:6px;background:{colour[s]}'></div></td>"
-        f"<td width='44' align='right' style='{F}font-size:12px;color:{MUTED}'>{round(100 * n / total)}%</td></tr>"
-        for s, n in mix.items()
-    )
-    return (
-        f"<div style='{F}font-size:13px;font-weight:600;color:{INK};margin:0 0 8px'>Rating mix "
-        f"<span style='font-weight:400;color:{MUTED}'>({total} rated items)</span></div>"
-        f"<table role='presentation' width='100%' cellpadding='0' cellspacing='0'>{rows}</table>"
-    )
-
-
+# ---------------------------------------------------------------- charts
 def volume_chart():
     days = S["daily"]
     top = max([d["count"] for d in days] + [1])
@@ -412,349 +270,201 @@ def themes_chart():
     )
 
 
-def ratings_chart():
-    """Average rating per theme against the overall average: which themes drag the rating down."""
-    overall = S["totals"].get("avgRating")
-    ts = [t for t in S["themes"] if t.get("avgRating") is not None]
-    if overall is None or not ts:
-        return ""
-    rows = "".join(
-        f"<tr><td width='40%' style='{F}font-size:12px;color:{INK};padding:4px 8px 4px 0'>{e(t['title'])}</td>"
-        f"<td style='padding:4px 0'><div style='width:{max(3, round(100 * t['avgRating'] / 5))}%;height:14px;border-radius:7px;"
-        f"background:{'#b91c1c' if t['avgRating'] < overall else '#15803d'}'></div></td>"
-        f"<td width='36' align='right' style='{F}font-size:12px;color:{MUTED}'>{t['avgRating']}</td></tr>"
-        for t in sorted(ts, key=lambda t: t["avgRating"])
-    )
-    return (
-        f"<div style='{F}font-size:13px;font-weight:600;color:{INK};margin:0 0 8px'>Rating by theme "
-        f"<span style='font-weight:400;color:{MUTED}'>(out of 5; overall {overall}. Red is below the overall average)</span></div>"
-        f"<table role='presentation' width='100%' cellpadding='0' cellspacing='0'>{rows}</table>"
-    )
-
-
+# ---------------------------------------------------------------- the pulse
 PRIVATE_NOTE = (
     f"<div style='{F}font-size:12px;color:{MUTED};margin-top:10px;font-style:italic'>No quotes: this feedback is private, "
     "so it is described and cited but not quoted (setup can allow quoting for a pulse that stays inside the company).</div>"
 )
+CAP_NOTE = f"Based on the newest {cfg['scope']['collect']['maxItems']} items in the window."
 
 
-def run_minutes():
-    if not info.get("startedAt"):
-        return None
-    started = datetime.datetime.fromisoformat(info["startedAt"])
-    return round((datetime.datetime.now().astimezone() - started).total_seconds() / 60, 1)
-
-
-def run_tokens():
-    """Total tokens, if the harness reported them (usage.json)."""
-    if not os.path.exists("usage.json"):
-        return None
-    usage = json.load(open("usage.json"))
-    total = usage.get("totalTokens") or (usage.get("inputTokens") or 0) + (usage.get("outputTokens") or 0)
-    return total or None
-
-
-def run_stats():
-    minutes, tokens = run_minutes(), run_tokens()
-    took = f"Made in {minutes:g} minutes" if minutes is not None else "Run time unknown"
-    used = f"{tokens:,} tokens" if tokens else "tokens not reported by this harness"
-    return f"{took} · {used}."
-
-
-def day(d):
-    d = datetime.date.fromisoformat(d)
-    return f"{d:%a} {d.day} {d:%b}"
-
-
-def when_text(s):
-    """Since when and the peak day, counted by code from the items' dates (plain text)."""
-    if not s.get("firstSeen"):
-        return ""
-    start = (S.get("coverage") or {}).get("from") or S["window"]["since"]
-    first = "Throughout the period" if s["firstSeen"] <= start else f"First seen {day(s['firstSeen'])}"
-    return first + (f", peaked {day(s['peakDay'])} ({s['peakCount']})" if s.get("peakCount", 0) > 1 else "")
-
-
-def body(preview, img):
-    t, ch = S["totals"], S.get("change") or {}
-    icon = img("logo.png") or PRODUCT.get("iconUrl")  # optional: the profile's logo, else nothing
-    icon_td = (
-        (
-            f"<td width='92' valign='middle'><img src='{e(icon)}' width='76' height='76' alt='' "
-            f"style='display:block;border-radius:14px'/></td>"
-        )
-        if icon
+def header_row(img):
+    logo = img("logo.png")
+    logo_td = (
+        f"<td width='92' valign='middle'><img src='{e(logo)}' width='76' height='76' alt='' "
+        f"style='display:block;border-radius:14px'/></td>"
+        if logo
         else ""
     )
-    rows = [
-        f"<tr><td bgcolor='{BRAND}' background='{img('header.png')}' style='background:{BRAND};background-image:"
-        + (f"url({img('header.png')})" if img("header.png") else f"linear-gradient(135deg,{BRAND} 0%,{BRAND2} 100%)")
-        + f";background-size:cover;background-position:center;padding:52px 28px'>"
-        f"<table role='presentation' width='100%' cellpadding='0' cellspacing='0'><tr>{icon_td}<td valign='middle'>"
-        f"<div style='{F}font-size:13px;font-weight:800;color:#ffffff;text-transform:uppercase;letter-spacing:1.2px'>{e(PRODUCT.get('name'))}</div>"
+    art = img("header.png")
+    background = f"url({art})" if art else f"linear-gradient(135deg,{BRAND} 0%,{BRAND2} 100%)"
+    return (
+        f"<tr><td bgcolor='{BRAND}' background='{art}' style='background:{BRAND};background-image:{background}"
+        f";background-size:cover;background-position:center;padding:52px 28px'>"
+        f"<table role='presentation' width='100%' cellpadding='0' cellspacing='0'><tr>{logo_td}<td valign='middle'>"
+        f"<div style='{F}font-size:13px;font-weight:800;color:#ffffff;text-transform:uppercase;letter-spacing:1.2px'>{e(PRODUCT)}</div>"
         f"<div style='{F}font-size:26px;font-weight:700;color:#ffffff;margin-top:2px'>{e(NAME)}</div>"
         f"<div style='{F}font-size:13px;color:#ffffff;opacity:.9;margin-top:4px'>{e(x['meta']['dateLabel'])} &middot; feedback from {e(x['meta']['windowLabel'])}</div>"
-        f"</td></tr></table></td></tr>",
-        f"<tr><td style='padding:22px 24px 4px'><div style='{F}font-size:18px;line-height:1.5;color:{INK}'>{cite(x['headline'])}</div></td></tr>",
+        f"</td></tr></table></td></tr>"
+    )
+
+
+def stats_row():
+    t, src = S["totals"], S["sources"]
+    return (
         f"<tr><td style='padding:14px 24px 0'><table role='presentation' width='100%' cellpadding='0' cellspacing='0' "
         f"style='background:#ffffff;border:1px solid {LINE};border-radius:12px'><tr>"
-        + stat("Items", t["items"], delta(ch.get("items"), better="none") if ch else "first edition")
-        + stat(
-            "Avg rating",
-            t["avgRating"] if t["avgRating"] is not None else "n/a",
-            delta(ch.get("avgRating")) if ch else "",
-        )
-        + stat(
-            "1 or 2 stars",
-            f"{t['lowShare']}%" if t["lowShare"] is not None else "n/a",
-            delta(ch.get("lowShare"), " pts", better="down") if ch else "",
-        )
+        + stat("Items", t["items"], "newest in the window" if S.get("capped") else "")
+        + stat("Avg rating", t["avgRating"] if t["avgRating"] is not None else "n/a")
+        + stat("1 or 2 stars", f"{t['lowShare']}%" if t["lowShare"] is not None else "n/a")
         + stat(
             "Connections",
-            f"{S['sources']['ok']} of {sum(S['sources'].values())}",
-            f"{S['sources']['blocked']} blocked" if S["sources"]["blocked"] else "all read",
+            f"{src['ok']} of {sum(src.values())}",
+            f"{src['blocked']} blocked" if src["blocked"] else "all read",
         )
-        + "</tr></table></td></tr>",
-    ]
-    if not preview:  # an email can't run scripts: link to the interactive versions, when there are real ones
-        ss, base = x.get("session") or {}, config.env("PULSE_PREVIEW_BASE")
-        links = ""
-        if base:  # a scheduled run's hosted preview (Cloud Storage, behind sign-in)
-            links += link_button(
-                f"{base.rstrip('/')}/{info['folder'].split('runs/', 1)[-1]}/out/preview.html",
-                "Open the interactive version",
-            )
-        if agent_link():
-            links += link_button(*agent_link())
-        if links:
-            rows.append(f"<tr><td style='padding:14px 24px 0'>{links}</td></tr>")
+        + "</tr></table></td></tr>"
+    )
+
+
+def read_from_row():
     chips = []
     for c in S.get("connections", []):
         ok = c["status"] == "ok"
-        tail = f"{c.get('collected', c.get('kept', 0))} items" if ok else c["status"]
+        tail = f"{c.get('kept', 0)} items" if ok else c["status"]
         lock = " &middot; private" if c.get("private") else ""
         chips.append(
             f"<span style='display:block;margin:6px 0 0'>{source_tag(c['id'])}"
             f"<span style='{F}font-size:12px;color:{INK if ok else '#c2410c'}'>{e(c['type'])} &middot; {e(tail)}{lock}</span></span>"
         )
-    rows.append(
-        f"<tr><td style='padding:6px 24px 0'><div style='{F}font-size:12px;color:{MUTED}'>Read from:</div>{''.join(chips)}</td></tr>"
-    )
+    row = f"<tr><td style='padding:6px 24px 0'><div style='{F}font-size:12px;color:{MUTED}'>Read from:</div>{''.join(chips)}</td></tr>"
     if S.get("capped"):
-        cv = S["coverage"]
-        rows.append(
-            f"<tr><td style='padding:8px 24px 0'><div style='{F}font-size:12px;color:{MUTED}'>The numbers above count all {cv['collected']} items in the window. "
-            f"Themes come from the newest {cv['analysed']}, from {e(cv['from'])} to {e(cv['until'])}.</div></td></tr>"
-        )
+        row += f"<tr><td style='padding:8px 24px 0'><div style='{F}font-size:12px;color:{MUTED}'>{e(CAP_NOTE)}</div></td></tr>"
+    return row
 
-    if img("map.png"):
-        rows.append(
-            section(
-                "Feedback map", "Each dot is one piece of feedback, placed near similar feedback and coloured by theme"
-            )
-        )
-        rows.append(
-            card(
-                f"<img src='{img('map.png')}' width='712' alt='Every item placed by similarity, coloured by theme' style='width:100%;height:auto;display:block'/>"
-                f"<div style='{F}font-size:12px;line-height:1.5;color:{MUTED};margin-top:6px'><b>How the map is made:</b> code turns each piece of "
-                f"feedback into numbers from the words it uses (TF-IDF), compresses them so words that tend to appear together count as "
-                f"related (LSA), groups similar items with K-means so the agent reads them together, and flattens everything onto two "
-                f"dimensions (PCA), so feedback that says similar things sits close together. The colours are the agent's themes, "
-                f"from reading every item; grey dots fit no theme. The axes have no units: only closeness matters.</div>"
-            )
-        )
-    rows.append(section("At a glance"))
-    rows.append(grid([box(volume_chart()), box(mix_chart() or sources_chart())]))
-    rows.append(card(themes_chart()))
-    if ratings_chart():
-        rows.append(card(ratings_chart()))
 
-    def when(s):
-        w = when_text(s)
-        return f"<div style='{F}font-size:12px;color:{INK};margin-top:6px'><b>When:</b> {e(w)}</div>" if w else ""
+def theme_card(th):
+    s = themes_by_id[th["id"]]
+    trend = pill(*TREND[s["trend"]]) if s["trend"] in TREND else ""
+    rating = f" &middot; average rating {s['avgRating']}" if s["avgRating"] is not None else ""
+    size = f"{s['count']} items &middot; {s['share']}% of all feedback &middot; {s['firstHalf']} then {s['secondHalf']} across the period"
+    return box(
+        f"<a name='{e(th['id'])}' id='{e(th['id'])}'></a><div>{pill(s['kind'], KIND.get(s['kind'], BRAND), solid=True)}{trend}</div>"
+        f"<div style='{F}font-size:17px;font-weight:700;color:{INK};margin-top:4px'>{e(th['title'])}</div>"
+        f"<div style='{F}font-size:12px;color:{MUTED};margin-top:3px'>{size}{rating}</div>"
+        f"<div style='{F}font-size:14px;line-height:1.55;color:{INK};margin-top:8px'>{cite(th['summary'])}</div>"
+        + label(f"theme {th['id']}", len(set(checks.citations(th["summary"]))))
+        + ("".join(quote(q) for q in th["quotes"]) or PRIVATE_NOTE)
+        + f"<div style='{F}font-size:12px;color:{MUTED};margin-top:10px'>From {source_counts(s)}</div>",
+        accent=KIND.get(s["kind"], BRAND),
+    )
 
-    def theme_card(th):
-        s = themes_by_id[th["id"]]
-        trend = pill(*TREND[s["trend"]]) if s["trend"] in TREND else ""
-        who = (
-            (f"<div style='{F}font-size:12px;color:{INK};margin-top:3px'><b>Who:</b> {cite(th['who'])}</div>")
-            if th.get("who")
-            else ""
-        )
-        rating = f" &middot; average rating {s['avgRating']}" if s["avgRating"] is not None else ""
-        size = f"{s['count']} items &middot; {s['share']}% of all feedback &middot; {s['firstHalf']} then {s['secondHalf']} across the period"
-        prev = f" &middot; {s['previousShare']}% last run" if s.get("previousShare") is not None else ""
-        srcs = "".join(
-            f"{source_tag(k)}<span style='margin-right:8px'>{v}</span>" for k, v in (s.get("sources") or {}).items()
-        )
-        return box(
-            f"<a name='{e(th['id'])}' id='{e(th['id'])}'></a><div>{pill(s['kind'], KIND.get(s['kind'], BRAND), solid=True)}{trend}</div>"
-            f"<div style='{F}font-size:17px;font-weight:700;color:{INK};margin-top:4px'>{e(th['title'])}</div>"
-            f"<div style='{F}font-size:12px;color:{MUTED};margin-top:3px'>{size}{prev}{rating}</div>"
-            f"<div style='{F}font-size:14px;line-height:1.55;color:{INK};margin-top:8px'>{cite(th['summary'])}</div>"
-            + when(s)
-            + who
-            + label(
-                "interpretation",
-                f"theme {th['id']}",
-                len(set(checks.citations(th["summary"])) | set(checks.citations(th.get("who")))),
-            )
-            + ("".join(quote(q) for q in th["quotes"]) or PRIVATE_NOTE)
-            + f"<div style='{F}font-size:12px;color:{MUTED};margin-top:10px'>From {srcs}</div>",
-            accent=KIND.get(s["kind"], BRAND),
-        )
 
+def theme_rows():
     issues = [th for th in x["themes"] if themes_by_id[th["id"]]["kind"] != "praise"]
     working = [th for th in x["themes"] if themes_by_id[th["id"]]["kind"] == "praise"]
+    rows = []
     if issues:
         rows.append(section("What customers are saying", "Every quote is word for word, with its source"))
         rows += [full(theme_card(th)) for th in issues]
-    if img("matrix.png"):
-        rows.append(section("Where to focus", "Each theme by how many customers it reaches and how much it hurts them"))
-        rows.append(
-            card(
-                f"<img src='{img('matrix.png')}' width='712' alt='Themes by reach and impact' style='width:100%;height:auto;display:block'/>"
-                f"<div style='{F}font-size:12px;color:{MUTED};margin-top:6px'>Reach is counted by code; impact is the agent's judgement "
-                f"(0 to 3, with ease of acting nudging it up). Top right is where to act first.</div>"
-            )
-        )
     if working:
         rows.append(section("What's working", "What customers praise: worth passing on to the teams behind it"))
         rows.append(grid([theme_card(th) for th in working]))
+    return rows
 
-    if x.get("watch"):
-        watch_by_id = {w["id"]: w for w in S.get("watch", [])}
-        rows.append(section("Watchlist", "Rare but serious: only a few items, but worth knowing about"))
-        boxes = []
-        for w in x["watch"]:
-            s = watch_by_id.get(w["id"], {})
-            srcs = "".join(
-                f"{source_tag(k)}<span style='margin-right:8px'>{v}</span>" for k, v in (s.get("sources") or {}).items()
-            )
-            boxes.append(
-                box(
-                    f"<div style='{F}font-size:16px;font-weight:700;color:{INK}'>{e(w['title'])}</div>"
-                    f"<div style='{F}font-size:12px;color:{MUTED};margin-top:3px'>{s.get('count', 0)} item{'s' if s.get('count') != 1 else ''} &middot; From {srcs}</div>"
-                    f"<div style='{F}font-size:14px;line-height:1.55;color:{INK};margin-top:8px'>{cite(w['why'])}</div>"
-                    + label("interpretation", f"watch {w['id']}", len(set(checks.citations(w["why"]))))
-                    + "".join(quote(q) for q in w.get("quotes") or []),
-                    accent="#b91c1c",
-                )
-            )
-        rows.append(grid(boxes))
 
-    if x.get("actions"):
+def watch_box(w, s):
+    count = s.get("count", 0)
+    return box(
+        f"<div style='{F}font-size:16px;font-weight:700;color:{INK}'>{e(w['title'])}</div>"
+        f"<div style='{F}font-size:12px;color:{MUTED};margin-top:3px'>{count} item{'s' if count != 1 else ''} &middot; From {source_counts(s)}</div>"
+        f"<div style='{F}font-size:14px;line-height:1.55;color:{INK};margin-top:8px'>{cite(w['why'])}</div>"
+        + label(f"watch {w['id']}", len(set(checks.citations(w["why"]))))
+        + "".join(quote(q) for q in w.get("quotes") or []),
+        accent="#b91c1c",
+    )
+
+
+def watch_rows():
+    if not x.get("watch"):
+        return []
+    watch_by_id = {w["id"]: w for w in S.get("watch", [])}
+    boxes = [watch_box(w, watch_by_id.get(w["id"], {})) for w in x["watch"]]
+    return [section("Watchlist", "Rare but serious: only a few items, but worth knowing about"), grid(boxes)]
+
+
+def action_rows():
+    if not x.get("actions"):
+        return []
+    rows = [section("Take action", "Ranked by impact, reach and growth, each with a draft ticket for the owning team")]
+    for n, a in enumerate(x["actions"], 1):
         rows.append(
-            section(
-                "Take action", "Ranked by impact, reach and growth, each with a draft ticket for the owning team"
+            card(
+                f"<table role='presentation' width='100%' cellpadding='0' cellspacing='0'><tr>"
+                f"<td width='40' valign='top'><div style='{F}width:30px;height:30px;border-radius:15px;background:{ACCENT};color:#fff;"
+                f"font-weight:700;font-size:15px;line-height:30px;text-align:center'>{n}</div></td>"
+                f"<td valign='top'>{action_ticket(a)}</td></tr></table>"
             )
         )
-        for n, a in enumerate(x["actions"], 1):
-            rows.append(
-                card(
-                    f"<table role='presentation' width='100%' cellpadding='0' cellspacing='0'><tr>"
-                    f"<td width='40' valign='top'><div style='{F}width:30px;height:30px;border-radius:15px;background:{ACCENT};color:#fff;"
-                    f"font-weight:700;font-size:15px;line-height:30px;text-align:center'>{n}</div></td>"
-                    f"<td valign='top'>{action_ticket(a, preview)}</td></tr></table>"
-                )
-            )
+    return rows
 
+
+def ask_rows():
     qs = "".join(f"<li style='margin:2px 0'>&ldquo;{e(q)}&rdquo;</li>" for q in x.get("questions") or [])
-    ss = x.get("session") or {}
-    back = (
-        link_button(*agent_link())
-        if agent_link()
-        else (
-            f"<div style='{F}font-size:13px;color:{INK};margin-top:8px'>To continue this conversation, run in the project folder: "
-            f"<code style='background:{BG};padding:2px 6px;border-radius:4px'>{e(ss['resume'])}</code></div>"
-            if ss.get("resume")
-            else ""
-        )
-    )
-    how = (
-        "Ask the agent directly, in the conversation where this pulse was made. It answers from this pulse's evidence, "
-        "with every claim cited. For example:"
-        if preview
-        else (
-            "Follow-up questions can't be answered by email yet. Continue in your agent, where this pulse was made, for example:"
-            if back
-            else "Follow-up questions can't be answered by email yet. Open the project in your agent harness and ask there, for example:"
-        )
-    )
-    rows.append(section("Ask your agent"))
-    rows.append(
+    return [
+        section("Ask your agent"),
         card(
-            f"<div style='{F}font-size:14px;line-height:1.6;color:{INK}'>{how}"
-            f"<ul style='margin:6px 0 0 18px;padding:0'>{qs}</ul>{back}"
+            f"<div style='{F}font-size:14px;line-height:1.6;color:{INK}'>Ask the agent in the conversation where this pulse "
+            f"was made, or open the project in your agent harness. It answers from this pulse's evidence, with every claim "
+            f"cited. For example:<ul style='margin:6px 0 0 18px;padding:0'>{qs}</ul>"
             f"<div style='{F}font-size:12px;color:{MUTED};margin-top:8px'>You can also ask it to change the pulse "
             f"(&ldquo;make it shorter&rdquo;) or add a connection.</div></div>"
-        )
-    )
+        ),
+    ]
 
+
+def footer_row():
     srcs = []
     for c in S.get("connections", []):
         tail = f"{c.get('kept', 0)} items" if c["status"] == "ok" else f"{c['status']}: {c.get('reason', '')}"
         if c.get("note"):
             tail += f" ({c['note']})"
         srcs.append(f"{source_label(c['id'])}{' (private)' if c.get('private') else ''}: {e(tail)}")
-    rows.append(
+    return (
         f"<tr><td style='padding:22px 24px 26px'><div style='{F}font-size:12px;line-height:1.65;color:{MUTED}'>"
         f"<b>Sources.</b> {'; '.join(srcs)}.<br/>{e(x['footer'])}<br/>"
         f"Written by an AI agent. Every quote was checked word for word against the collected feedback, every number was "
         f"computed by code, and private feedback is quoted only when setup allows it. Names, emails and reference numbers "
-        f"are removed before anything is written.<br/>{e(run_stats())}</div></td></tr>"
+        f"are removed before anything is written.</div></td></tr>"
     )
-    rows.append(evidence(preview))
-    return "".join(rows)
 
 
-def evidence_row(i, n=None, short=False):
+def evidence_row(n, i):
     it = items.get(i, {})
-    num = f"<b>[{n}]</b> " if n else ""
     link = f" &middot; <a href='{e(it['url'])}' style='color:{BRAND}'>open</a>" if it.get("url") else ""
     text = (f"{it['title']}: " if it.get("title") else "") + it.get("text", "")
-    if short and len(text) > 120:  # one line per item in the email; the full text is in the preview and the run
-        text = text[:117].rsplit(" ", 1)[0] + "…"
+    if len(text) > 160:  # one short line per item keeps the email small; the full text stays with the run
+        text = text[:157].rsplit(" ", 1)[0] + "…"
     return (
         f"<tr id='ev-{e(i)}'><td style='{F}font-size:12px;line-height:1.5;color:{INK};padding:6px 0;border-top:1px solid {LINE}'>"
-        f"{num}{source_tag(it.get('source'))}<span style='color:{MUTED}'>{e(i)} &middot; {e(it.get('date'))} "
+        f"<b>[{n}]</b> {source_tag(it.get('source'))}<span style='color:{MUTED}'>{e(i)} &middot; {e(it.get('date'))} "
         f"{stars(it.get('rating'), it.get('ratingScale'))}{link}</span><br/>{e(text)}</td></tr>"
     )
 
 
-def evidence(preview):
+def evidence():
     """The items the pulse cites, numbered. Everything collected stays with the run, for the agent to answer questions from."""
-    cited = "".join(evidence_row(i, n, short=not preview) for n, i in enumerate(CITED, 1))
-    table = f"<table role='presentation' width='100%' cellpadding='0' cellspacing='0'>{cited}</table>"
-    if preview:  # collapsed until opened; clicking a citation opens it (COPY_JS)
-        table = (
-            f"<details id='evidence-list'><summary style='{F}font-size:13px;font-weight:600;color:{BRAND};cursor:pointer'>"
-            f"Show the {len(CITED)} cited items</summary>{table}</details>"
-        )
+    rows = "".join(evidence_row(n, i) for n, i in enumerate(CITED, 1))
     more = (
         f"<div style='{F}font-size:12px;color:{MUTED};margin-top:8px'>All {len(items)} items collected are kept with this run; "
         f"ask your agent about any of them.</div>"
     )
+    table = f"<table role='presentation' width='100%' cellpadding='0' cellspacing='0'>{rows}</table>"
     return section("Evidence", "Every item the pulse cites") + card(table + more)
 
 
-COPY_JS = """<script>
-function copyText(b) {
-  var t = b.getAttribute('data-t'), label = b.textContent;
-  function done() { b.textContent = 'Copied'; setTimeout(function () { b.textContent = label; }, 1500); }
-  function fallback() {  // file:// pages and embedded previews often block the clipboard API
-    var a = document.createElement('textarea'); a.value = t; a.style.position = 'fixed'; a.style.opacity = '0';
-    document.body.appendChild(a); a.focus(); a.select();
-    try { document.execCommand('copy') ? done() : (b.textContent = 'Press Ctrl+C'); } catch (e) { b.textContent = 'Press Ctrl+C'; }
-    document.body.removeChild(a);
-  }
-  if (navigator.clipboard && window.isSecureContext) { navigator.clipboard.writeText(t).then(done, fallback); } else { fallback(); }
-}
-document.addEventListener('click', function (ev) {  // a citation opens the collapsed evidence list before jumping to it
-  var a = ev.target.closest && ev.target.closest('a[href^="#ev-"]'), d = document.getElementById('evidence-list');
-  if (a && d) { d.open = true; }
-});
-</script>"""
+def body(img):
+    rows = [
+        header_row(img),
+        f"<tr><td style='padding:22px 24px 4px'><div style='{F}font-size:18px;line-height:1.5;color:{INK}'>{cite(x['headline'])}</div></td></tr>",
+        stats_row(),
+        read_from_row(),
+        section("At a glance"),
+        card(volume_chart()),
+        card(themes_chart()),
+    ]
+    rows += theme_rows() + watch_rows() + action_rows() + ask_rows()
+    rows += [footer_row(), evidence()]  # the evidence comes last, once every citation is numbered
+    return "".join(rows)
 
 
 def mix(a, b, w):
@@ -763,7 +473,8 @@ def mix(a, b, w):
     return "#" + "".join(f"{round(x + (y - x) * w):02x}" for x, y in zip(a, b))
 
 
-def page(img, preview=False):
+def page(img):
+    """The pulse as one email-safe page: tables and inline styles, no scripts."""
     DEEP = mix(BRAND, "#000000", 0.35)  # the primary colour, a bit darker
     css = (
         "@media (max-width:620px){.wrap{width:100%!important}.stat{display:block!important;width:100%!important;"
@@ -771,153 +482,49 @@ def page(img, preview=False):
         + LINE
         + "}.col{display:block!important;width:auto!important;margin-bottom:12px}.gap{display:none!important}}"
     )
-    strip = ""
-    if preview:
-        to = f"<br/><b>To:</b> {e(cfg['recipient'])}" if cfg.get("delivery") in ("email", "both") else ""
-        strip = (
-            f"<div style='{F}width:92%;max-width:1100px;margin:0 auto 12px;font-size:12px;color:#ffffff'>"
-            f"<b>Subject:</b> {e(NAME)}{to}</div>"
-        )
     return (
         f"<!doctype html><html><head><meta charset='utf-8'/><meta name='viewport' content='width=device-width,initial-scale=1'/>"
-        f"<title>{e(x['subject'])}</title><style>{css}</style>{COPY_JS if preview else ''}</head>"
+        f"<title>{e(x['subject'])}</title><style>{css}</style></head>"
         f"<body style='margin:0;padding:24px 0;min-height:100vh;background:{DEEP};"
-        f"background-image:linear-gradient(135deg,{DEEP} 0%,{mix(DEEP, BRAND, .5)} 70%,{mix(BRAND, ACCENT, .12)} 100%);background-attachment:fixed'>{strip}"
+        f"background-image:linear-gradient(135deg,{DEEP} 0%,{mix(DEEP, BRAND, .5)} 70%,{mix(BRAND, ACCENT, .12)} 100%);background-attachment:fixed'>"
         f"<div style='display:none;max-height:0;overflow:hidden'>{e(x['preheader'])}</div>"
-        + (
-            f"<table role='presentation' class='wrap' width='100%' align='center' cellpadding='0' cellspacing='0' "
-            f"style='width:92%;max-width:1100px;margin:0 auto;background:{BG};border-radius:16px;overflow:hidden;"
-            if preview
-            else f"<table role='presentation' class='wrap' width='760' align='center' cellpadding='0' cellspacing='0' "
-            f"style='width:760px;max-width:100%;margin:0 auto;background:{BG};border-radius:16px;overflow:hidden;"
-        )
-        + f"box-shadow:0 24px 60px rgba(0,0,0,.35),0 4px 14px rgba(0,0,0,.18)'>{body(preview, img)}</table></body></html>"
+        f"<table role='presentation' class='wrap' width='760' align='center' cellpadding='0' cellspacing='0' "
+        f"style='width:760px;max-width:100%;margin:0 auto;background:{BG};border-radius:16px;overflow:hidden;"
+        f"box-shadow:0 24px 60px rgba(0,0,0,.35),0 4px 14px rgba(0,0,0,.18)'>{body(img)}</table></body></html>"
     )
 
 
-def text():
-    out = [NAME, f"{x['meta']['dateLabel']}, feedback from {x['meta']['windowLabel']}", "", x["headline"], ""]
-    for n, a in enumerate(x.get("actions") or [], 1):
-        tk = a.get("ticket") or {}
-        out += [f"{n}. {tk.get('title') or a.get('title', '')} ({a.get('owner', '')})", f"   {tk.get('issue', '')}"]
-    for th in x["themes"]:
-        s = themes_by_id[th["id"]]
-        out += ["", f"* {th['title']} ({s['count']} items, {s['share']}%)", f"  {th['summary']}"]
-        out += [f"  \"{q['text']}\" ({items.get(q['item'], {}).get('sourceLabel', '')})" for q in th["quotes"]]
-    for w in x.get("watch") or []:
-        out += ["", f"Watchlist: {w['title']}", f"  {w['why']}"]
-        out += [f"  \"{q['text']}\" ({items.get(q['item'], {}).get('sourceLabel', '')})" for q in w.get("quotes") or []]
-    for a in x.get("actions") or []:
-        tk = a.get("ticket") or {}
-        out += ["", f"Draft ticket: {tk.get('title', '')}", ticket_text(tk)]
-    if x.get("questions"):
-        out += [
-            "",
-            "Follow-up questions can't be answered by email yet; open the project in your agent harness and ask there, for example:",
-        ]
-        out += [f"  - {q}" for q in x["questions"]]
-    out += ["", x["footer"], run_stats()]
-    return "\n".join(out)
-
-
-def markdown():
-    """The same order as the email: summary, map, charts as numbers, themes, then actions with their tickets."""
-    t, ch = S["totals"], S.get("change") or {}
+def chat_summary():
+    """The short version for the chat (and the email's plain text part), from the same computed numbers."""
     out = [
         f"# {NAME}",
-        f"*{PRODUCT.get('name', '')} · {x['meta']['dateLabel']} · feedback from {x['meta']['windowLabel']}*",
+        f"*{PRODUCT} · {x['meta']['dateLabel']} · feedback from {x['meta']['windowLabel']}*",
         "",
         x["headline"],
-        "",
     ]
-    nums = [f"**{t['items']}** items"]
-    if t["avgRating"] is not None:
-        nums.append(
-            f"average rating **{t['avgRating']}**"
-            + (f" ({ch['avgRating']:+g} vs last run)" if ch.get("avgRating") else "")
-        )
-    if t["lowShare"] is not None:
-        nums.append(f"**{t['lowShare']}%** at the lowest ratings")
-    reads = ", ".join(f"[{c['label']}]({c['link']})" if c.get("link") else c["label"] for c in S.get("connections", []))
-    out += [" · ".join(nums), f"Read from: {reads}", ""]
     if S.get("capped"):
-        cv = S["coverage"]
-        out += [
-            f"*The numbers count all {cv['collected']} items in the window. Themes come from the newest {cv['analysed']}, from {cv['from']} to {cv['until']}.*",
-            "",
-        ]
-    if os.path.exists("out/map.png"):
-        out += ["![Feedback map](map.png)", ""]
-    if os.path.exists("out/matrix.png"):
-        out += ["![Where to focus: themes by reach and impact](matrix.png)", ""]
-    groups = [
-        ("What customers are saying", [th for th in x["themes"] if themes_by_id[th["id"]]["kind"] != "praise"]),
-        ("What's working", [th for th in x["themes"] if themes_by_id[th["id"]]["kind"] == "praise"]),
-    ]
-    for heading, group in groups:
-        if not group:
-            continue
-        out += [f"## {heading}", ""]
-        for th in group:
-            s = themes_by_id[th["id"]]
-            trend = f" · {TREND[s['trend']][0]}" if s["trend"] in TREND else ""
-            srcs = ", ".join(f"{conns.get(k, {}).get('label', k)} {v}" for k, v in (s.get("sources") or {}).items())
-            out += [
-                f"### {th['title']}",
-                f"*{s['kind']} · {s['count']} items · {s['share']}% of feedback{trend} · sources: {srcs}*",
-                "",
-                th["summary"],
-                "",
-            ]
-            out += [f"**When:** {when_text(s)}"] if when_text(s) else []
-            out += [f"**Who:** {th['who']}"] if th.get("who") else []
-            out += [""]
-            for q in th["quotes"]:
-                it = items.get(q["item"], {})
-                src = f"[{it.get('sourceLabel', '')}]({it['url']})" if it.get("url") else it.get("sourceLabel", "")
-                out += [f"> \u201c{q['text']}\u201d", f"> \u2014 {src}, {it.get('date', '')}", ""]
-    if x.get("watch"):
-        out += ["## Watchlist", "*Rare but serious: only a few items, but worth knowing about.*", ""]
-        for w in x["watch"]:
-            out += [f"### {w['title']}", "", w["why"], ""]
-            for q in w.get("quotes") or []:
-                it = items.get(q["item"], {})
-                out += [f"> \u201c{q['text']}\u201d", f"> \u2014 {it.get('sourceLabel', '')}, {it.get('date', '')}", ""]
+        out += ["", f"*{CAP_NOTE}*"]
     if x.get("actions"):
-        out += ["## Take action", ""]
+        out += ["", "## Top actions"]
         for n, a in enumerate(x["actions"], 1):
             tk = a.get("ticket") or {}
-            out += [
-                f"{n}. **{tk.get('title') or a.get('title', '')}** ({a.get('owner', '')}): {tk.get('issue', '')} *Feedback: {', '.join(tk.get('items') or [])}*",
-                "",
-            ]
-    if CITED:
-        out += ["## Evidence", ""]
-        for n, i in enumerate(CITED, 1):
-            it = items.get(i, {})
-            src = f"[{it.get('sourceLabel', '')}]({it['url']})" if it.get("url") else it.get("sourceLabel", "")
-            out.append(f"{n}. `{i}` · {src} · {it.get('date', '')}: {it.get('text', '')[:200]}")
-        out.append("")
-    if x.get("questions"):
-        out += [
-            "## Ask me",
-            "",
-            "Ask me directly here; I answer from this pulse's evidence, with every claim cited. For example:",
-            "",
-        ]
-        out += [f"- {q}" for q in x["questions"]] + [""]
+            out.append(
+                f"{n}. **{tk.get('title') or a.get('title', '')}** ({a.get('owner', '')}): {tk.get('issue', '')}"
+            )
+    out += ["", "## Themes"]
     out += [
-        "---",
-        x["footer"],
-        "",
-        f"*{run_stats()}*",
-        "",
-        "*Summaries and actions are the agent's interpretation, with the items they cite; quotes and numbers are checked by code.*",
+        f"- {th['title']} ({themes_by_id[th['id']]['count']} items, {themes_by_id[th['id']]['share']}%)"
+        for th in x["themes"]
     ]
-    return "\n".join(out)
+    if x.get("watch"):
+        counts = {w["id"]: w.get("count", 0) for w in S.get("watch", [])}
+        out += ["", "## Watchlist"] + [f"- {w['title']} ({counts.get(w['id'], 0)} items)" for w in x["watch"]]
+    out += ["", "## Ask your agent"] + [f"- {q}" for q in x.get("questions") or []]
+    out += ["", "The full pulse, with quotes and evidence, is in preview.html."]
+    return "\n".join(out) + "\n"
 
 
-# ---------------------------------------------------------------- write
+# ---------------------------------------------------------------- images
 def _plt():
     try:
         import matplotlib
@@ -928,175 +535,9 @@ def _plt():
         return plt
     except ImportError:
         print(
-            "matplotlib is missing, so the pulse has no map or header art; install it with: python3 -m pip install -r requirements.txt"
+            "matplotlib is missing, so the pulse has no header art; install it with: python3 -m pip install -r requirements.txt"
         )
         return None
-
-
-def draw_map():
-    """Every item at its position from cluster.py: colour shows its theme, shape shows its connection."""
-    plt = _plt()
-    if not plt or not os.path.exists("clusters.json"):
-        return False
-    pos = json.load(open("clusters.json"))["positions"]
-    tags = {}
-    for p in ["tags/carried.json"] + sorted(glob.glob("tags/part_*.json")):
-        if os.path.exists(p):
-            tags.update(json.load(open(p)))
-    shown = [th["id"] for th in x["themes"]]
-    colour = THEME_COLOUR
-    fig, ax = plt.subplots(figsize=(8, 5.6), dpi=160)
-    fig.patch.set_facecolor("white")
-    ax.set_facecolor(TINT)
-    for iid, (px, py) in pos.items():
-        tid = next((t for t in (tags.get(iid) or []) if t in colour), None)
-        _, marker, _ = SRC_STYLE.get(items.get(iid, {}).get("source"), ("", "o", ""))
-        ax.scatter(
-            px,
-            py,
-            s=26 if tid else 12,
-            marker=marker,
-            color=colour.get(tid, "#c3cad3"),
-            alpha=0.9 if tid else 0.5,
-            edgecolors="white",
-            linewidths=0.4,
-            zorder=3 if tid else 2,
-        )
-    keys = []
-    for n, tid in enumerate(
-        shown, 1
-    ):  # a small number at the centre of each theme's points; the names go in the key below
-        pts = [pos[i] for i in pos if tid in (tags.get(i) or [])]
-        if pts:
-            cx, cy = sum(p[0] for p in pts) / len(pts), sum(p[1] for p in pts) / len(pts)
-            ax.annotate(
-                str(n),
-                (cx, cy),
-                fontsize=8,
-                fontweight="bold",
-                color="white",
-                ha="center",
-                va="center",
-                zorder=4,
-                bbox=dict(boxstyle="circle,pad=0.3", fc=colour[tid], ec="white", lw=1),
-            )
-        keys.append(
-            plt.Line2D(
-                [],
-                [],
-                marker="o",
-                color=colour[tid],
-                linestyle="",
-                markersize=7,
-                label=f"{n}. {themes_by_id[tid]['title'][:60]}",
-            )
-        )
-    handles = [
-        plt.Line2D([], [], marker=SRC_STYLE[c["id"]][1], color="#55606e", linestyle="", markersize=6, label=c["label"])
-        for c in S.get("connections", [])
-        if c["id"] in SRC_STYLE
-    ]
-    ax.add_artist(
-        ax.legend(
-            handles=handles,
-            loc="upper right",
-            frameon=True,
-            fontsize=7.5,
-            framealpha=0.9,
-            title="Shape = source",
-            title_fontsize=7.5,
-        )
-    )
-    ax.legend(
-        handles=keys,
-        loc="upper center",
-        bbox_to_anchor=(0.5, -0.02),
-        ncol=2,
-        frameon=False,
-        fontsize=7.5,
-        handletextpad=0.3,
-        columnspacing=1.2,
-    )
-    ax.set_xticks([])
-    ax.set_yticks([])
-    for side in ax.spines.values():
-        side.set_visible(False)
-    fig.tight_layout()
-    fig.savefig("out/map.png", facecolor="white", bbox_inches="tight")
-    plt.close(fig)
-    return True
-
-
-def draw_matrix():
-    """Priority matrix: each theme by reach (share of feedback, counted by code) and impact (the agent's score)."""
-    plt = _plt()
-    ts = [themes_by_id[th["id"]] for th in x["themes"] if themes_by_id[th["id"]].get("impact") is not None]
-    if not plt or len(ts) < 2:
-        return False
-    fig, ax = plt.subplots(figsize=(8, 4.6), dpi=160)
-    fig.patch.set_facecolor("white")
-    ax.set_facecolor("white")
-    top = max(t["share"] for t in ts)
-    xmid = top / 2
-    ax.axvline(xmid, color=LINE, lw=1, zorder=1)
-    ax.axhline(1.75, color=LINE, lw=1, zorder=1)
-    ax.fill_between([xmid, top * 1.15], 1.75, 3.9, color=TINT, zorder=0)
-    ax.text(top * 1.12, 3.8, "act first", ha="right", va="top", fontsize=8, color=MUTED, style="italic")
-    keys = []
-    for n, th in enumerate(x["themes"], 1):
-        t = themes_by_id[th["id"]]
-        if t.get("impact") is None:
-            continue
-        y = t["impact"] + 0.25 * (
-            t.get("actionability") or 0
-        )  # ease of acting nudges a theme up within its impact band
-        ax.scatter(
-            t["share"],
-            y,
-            s=120 + 18 * t["count"] ** 0.8,
-            color=THEME_COLOUR[th["id"]],
-            alpha=0.85,
-            edgecolors="white",
-            lw=1.2,
-            zorder=3,
-        )
-        ax.annotate(
-            str(n), (t["share"], y), fontsize=8, fontweight="bold", color="white", ha="center", va="center", zorder=4
-        )
-        keys.append(
-            plt.Line2D(
-                [],
-                [],
-                marker="o",
-                color=THEME_COLOUR[th["id"]],
-                linestyle="",
-                markersize=7,
-                label=f"{n}. {th['title'][:60]}",
-            )
-        )
-    ax.set_xlim(0, top * 1.15)
-    ax.set_ylim(-0.3, 3.9)
-    ax.set_xlabel("Reach: share of all feedback (%)", fontsize=8, color=MUTED)
-    ax.set_ylabel("Impact (agent's judgement)", fontsize=8, color=MUTED)
-    ax.set_yticks([0, 1, 2, 3])
-    ax.set_yticklabels(["none", "minor", "major", "blocking"], fontsize=7.5, color=MUTED)
-    ax.tick_params(axis="x", labelsize=7.5, colors=MUTED)
-    for side in ("top", "right"):
-        ax.spines[side].set_visible(False)
-    ax.legend(
-        handles=keys,
-        loc="upper center",
-        bbox_to_anchor=(0.5, -0.14),
-        ncol=2,
-        frameon=False,
-        fontsize=7.5,
-        handletextpad=0.3,
-        columnspacing=1.2,
-    )
-    fig.tight_layout()
-    fig.savefig("out/matrix.png", facecolor="white", bbox_inches="tight")
-    plt.close(fig)
-    return True
 
 
 def asset(name):
@@ -1114,8 +555,6 @@ def draw_logo():
     if not own:
         return False
     if own.endswith(".png"):
-        import shutil
-
         shutil.copy(own, "out/logo.png")
         return True
     plt = _plt()
@@ -1125,14 +564,35 @@ def draw_logo():
     return True
 
 
+def crop_to_header(im):
+    """The middle of an image, cut to the header's 4:1 shape."""
+    h, w = im.shape[:2]
+    if w / h > 4:
+        cut = int((w - 4 * h) / 2)
+        return im[:, cut : w - cut]
+    cut = int((h - w / 4) / 2)
+    return im[cut : h - cut]
+
+
+def draw_waves(plt, ax):
+    """A gradient in the profile's colours with soft waves, when the profile has no header image."""
+    import math
+    from matplotlib.colors import LinearSegmentedColormap
+
+    gradient = LinearSegmentedColormap.from_list("b", [BRAND, BRAND2])
+    ax.imshow([[i / 255 for i in range(256)]], extent=[0, 12.8, 0, 3.2], aspect="auto", cmap=gradient)
+    xs = [i / 10 for i in range(129)]
+    for k in range(5):
+        ys = [1.2 + 0.35 * k + 0.45 * math.sin(xv / 1.7 + k * 1.3) for xv in xs]
+        ax.fill_between(xs, ys, 3.2 if k % 2 else 0, color="white", alpha=0.035 + 0.01 * k, lw=0)
+
+
 def draw_header():
     """The header background: the profile's own image (assets/header.png or .jpg), cropped to the header and darkened
     with a black overlay so white text stays readable; otherwise a gradient in the profile's colours."""
     plt = _plt()
     if not plt:
         return False
-    from matplotlib.colors import LinearSegmentedColormap
-
     fig = plt.figure(figsize=(12.8, 3.2), dpi=100)
     ax = fig.add_axes([0, 0, 1, 1])
     ax.set_xlim(0, 12.8)
@@ -1140,96 +600,42 @@ def draw_header():
     ax.axis("off")
     own = asset("header")
     if own:
-        im = plt.imread(own)
-        h, w = im.shape[:2]
-        if w / h > 4:  # crop the middle to the header's 4:1 shape
-            cut = int((w - 4 * h) / 2)
-            im = im[:, cut : w - cut]
-        else:
-            cut = int((h - w / 4) / 2)
-            im = im[cut : h - cut]
-        ax.imshow(im, extent=[0, 12.8, 0, 3.2], aspect="auto")
+        ax.imshow(crop_to_header(plt.imread(own)), extent=[0, 12.8, 0, 3.2], aspect="auto")
         ax.add_patch(
             plt.Rectangle((0, 0), 12.8, 3.2, color="#000000", alpha=0.68, lw=0)
         )  # dark overlay keeps the white text readable
     else:
-        import math
-
-        ax.imshow(
-            [[i / 255 for i in range(256)]],
-            extent=[0, 12.8, 0, 3.2],
-            aspect="auto",
-            cmap=LinearSegmentedColormap.from_list("b", [BRAND, BRAND2]),
-        )
-        for k in range(5):  # soft waves
-            ys = [1.2 + 0.35 * k + 0.45 * math.sin(xv / 1.7 + k * 1.3) for xv in [i / 10 for i in range(129)]]
-            ax.fill_between(
-                [i / 10 for i in range(129)], ys, 3.2 if k % 2 else 0, color="white", alpha=0.035 + 0.01 * k, lw=0
-            )
+        draw_waves(plt, ax)
     fig.savefig("out/header.png")
     plt.close(fig)
     return True
 
 
+# ---------------------------------------------------------------- write
+def email_message(html_part, text_part, cids):
+    m = EmailMessage()
+    m["Subject"], m["To"] = x["subject"], cfg["recipient"]
+    m["Date"] = format_datetime(datetime.datetime.now().astimezone())
+    m.set_content(text_part)
+    m.add_alternative(html_part, subtype="html")
+    for name, cid in cids.items():
+        m.get_payload()[1].add_related(
+            open(f"out/{name}", "rb").read(), "image", "png", cid=f"<{cid}>", disposition="inline", filename=name
+        )
+    return m
+
+
 os.makedirs("out", exist_ok=True)
-made = {"map.png": draw_map(), "matrix.png": draw_matrix(), "header.png": draw_header(), "logo.png": draw_logo()}
+made = {"header.png": draw_header(), "logo.png": draw_logo()}
 cids = {name: make_msgid(domain="pulse.local")[1:-1] for name, ok in made.items() if ok}
-uri = lambda name: (
-    ("data:image/png;base64," + base64.b64encode(open(f"out/{name}", "rb").read()).decode()) if name in cids else ""
-)
-html_preview = page(uri, preview=True)  # first render numbers the citations
-open("out/pulse.md", "w").write(markdown())
-open("out/preview.html", "w").write(html_preview)
-json.dump(CLAIMS, open("out/claims.json", "w"), indent=1, ensure_ascii=False)
-log = [json.loads(l) for l in open("checks_log.jsonl")] if os.path.exists("checks_log.jsonl") else []
-tags_all = {}
-for p_ in ["tags/carried.json"] + sorted(glob.glob("tags/part_*.json")):
-    if os.path.exists(p_):
-        tags_all.update(json.load(open(p_)))
-agent_sentences = sum(
-    len(checks.sentences(v))
-    for v in [t.get("summary") for t in x["themes"]]
-    + [a.get("detail") for a in x.get("actions") or []]
-    + [(a.get("ticket") or {}).get("issue") for a in x.get("actions") or []]
-)
-metrics = {
-    "date": info["date"],
-    "items": len(items),
-    "itemsTagged": sum(1 for i in items if i in tags_all),
-    "untaggedShare": S.get("untaggedShare"),
-    "connections": {c["id"]: c["status"] for c in S.get("connections", [])},
-    "quotesVerified": sum(len(t.get("evidence") or []) for t in kept_themes.values()),
-    "quotesShown": sum(len(t["quotes"]) for t in x["themes"]),
-    "agentSentences": agent_sentences,
-    "sentencesCited": sum(1 for c in CLAIMS if c["where"] != "headline"),
-    "itemsCited": len(CITED),
-    "claims": len(CLAIMS),
-    "claimsVerified": sum(1 for c in CLAIMS if VERDICTS.get(c["id"], {}).get("supported")),
-    "claimsUnsupported": [c["id"] for c in CLAIMS if c["id"] in VERDICTS and not VERDICTS[c["id"]].get("supported")],
-    "checkFailuresCaught": sum(len(r["errors"]) for r in log),
-    "checkRunsFailed": len(log),
-    "tagsCarried": len(json.load(open("tags/carried.json"))) if os.path.exists("tags/carried.json") else 0,
-    "minutes": run_minutes(),
-    "usage": (
-        json.load(open("usage.json")) if os.path.exists("usage.json") else None
-    ),  # tokens, if the harness reports them
-}
-json.dump(metrics, open("out/metrics.json", "w"), indent=2)
 html_part = page(lambda name: f"cid:{cids[name]}" if name in cids else "")
-open("out/email.html", "w").write(html_part)
-open("out/email.txt", "w").write(text())
-m = EmailMessage()
-m["Subject"], m["To"] = x["subject"], cfg["recipient"]
-m["Date"] = format_datetime(datetime.datetime.now().astimezone())
-m.set_content(text())
-m.add_alternative(html_part, subtype="html")
-for name, cid in cids.items():
-    m.get_payload()[1].add_related(
-        open(f"out/{name}", "rb").read(), "image", "png", cid=f"<{cid}>", disposition="inline", filename=name
-    )
-open("out/email.eml", "wb").write(bytes(m))
-print(
-    f"wrote {info['folder']}/out/pulse.md, preview.html and email.eml"
-    + (" with the feedback map" if "map.png" in cids else "")
-)
+preview = html_part
+for name, cid in cids.items():  # the same page; in a browser the images are the files next to it
+    preview = preview.replace(f"cid:{cid}", name)
+summary_text = chat_summary()
+open("out/preview.html", "w").write(preview)
+open("out/pulse.md", "w").write(summary_text)
+json.dump(CLAIMS, open("out/claims.json", "w"), indent=1, ensure_ascii=False)
+open("out/email.eml", "wb").write(bytes(email_message(html_part, summary_text, cids)))
+print(f"wrote {info['folder']}/out/pulse.md, preview.html, claims.json and email.eml")
 print(f"preview: {os.path.abspath('out/preview.html')}")

@@ -1,4 +1,3 @@
-import datetime
 import json
 import os
 import re
@@ -164,7 +163,9 @@ def themes(cfg, info):
             watched += 1
             share = computed.get("share", 0)
             if share > limits["watchMaxShare"]:
-                errors.append(f"`{path}` is {share}% of feedback; the watchlist is for rare items (up to {limits['watchMaxShare']}%), so keep it")
+                errors.append(
+                    f"`{path}` is {share}% of feedback; the watchlist is for rare items (up to {limits['watchMaxShare']}%), so keep it"
+                )
             if scores.get("impact", 0) < 2:
                 errors.append(f"`{path}` is on the watchlist, which is only for serious items (impact 2 or 3)")
             if not computed.get("count"):
@@ -213,9 +214,6 @@ def plan(cfg, info):
 
     if not 1 <= len(shown) <= limits["maxThemes"] or any(tid not in kept for tid in shown):
         errors.append(f"`themes` must list 1 to {limits['maxThemes']} kept theme ids")
-    praise = [tid for tid, theme in kept.items() if theme.get("kind") == "praise"]
-    if praise and not any(tid in praise for tid in shown):
-        errors.append(f"`themes` must include at least one praise theme for \"What's working\": {', '.join(praise)}")
     if sorted(plan.get("watch") or []) != sorted(watched):
         errors.append(f"`watch` must list every watched theme: {', '.join(sorted(watched)) or 'none'}")
     return errors
@@ -224,16 +222,8 @@ def plan(cfg, info):
 # ---------------------------------------------------------------- live_content.json
 
 
-def check_extras(errors, content):
-    """The optional session link and the follow-up questions."""
-    session = content.get("session") or {}
-    resume = str(session.get("resume", ""))
-    bad_url = session.get("url") and not str(session["url"]).startswith("https://")
-    if session and (set(session) - {"url", "resume"} or bad_url or len(resume) > 200 or "\n" in resume):
-        errors.append(
-            '`session` is optional: {"url": "https://..."} or {"resume": "a one-line command"}, only if your harness gives you one'
-        )
-
+def check_questions(errors, content):
+    """The 2 or 3 follow-up questions the reader could ask the agent."""
     questions = content.get("questions") or []
     if not 2 <= len(questions) <= 3:
         errors.append("`questions` needs 2 or 3 follow-up questions the reader could ask about this pulse")
@@ -259,8 +249,6 @@ def check_themes_shown(errors, content, kept, limits, by_id):
     for k, shown in enumerate(content.get("themes") or []):
         theme = kept.get(shown.get("id"))
         check_cited(errors, f"themes[{k}].summary", shown.get("summary"), tagged_items(theme), by_id)
-        if shown.get("who"):  # optional: who is affected, as customers describe it
-            check_cited(errors, f"themes[{k}].who", shown.get("who"), tagged_items(theme), by_id)
 
         allowed_quotes, quotes = checked_quotes(theme), shown.get("quotes") or []
         most = limits["maxQuotesPerTheme"]
@@ -282,10 +270,6 @@ def check_actions(errors, content, kept, by_id):
         ticket = action.get("ticket") or {}
         if action.get("detail"):  # optional
             check_cited(errors, f"actions[{k}].detail", action.get("detail"), allowed, by_id)
-        if "issue" not in ticket and ticket.get("body"):  # the older shape: citations inside the body
-            check_cited(errors, f"actions[{k}].ticket.body", ticket.get("body"), allowed, by_id)
-            check_text(errors, f"actions[{k}].ticket.title", ticket.get("title"))
-            continue
         for field in ("title", "issue"):
             check_text(errors, f"actions[{k}].ticket.{field}", ticket.get(field))
         cited = ticket.get("items") or []
@@ -336,7 +320,7 @@ def check_numbers(errors, content, by_id):
         fields += [(f"actions[{k}].title", action.get("title")), (f"actions[{k}].detail", action.get("detail"))]
         fields += [
             (f"actions[{k}].ticket.title", ticket.get("title")),
-            (f"actions[{k}].ticket.issue", ticket.get("issue") or ticket.get("body")),
+            (f"actions[{k}].ticket.issue", ticket.get("issue")),
         ]
     for k, theme in enumerate(content.get("themes") or []):
         fields += [(f"themes[{k}].title", theme.get("title")), (f"themes[{k}].summary", theme.get("summary"))]
@@ -366,7 +350,7 @@ def content(cfg, info):
         )
     for field in ("subject", "preheader", "headline", "footer"):
         check_text(errors, field, live.get(field))
-    check_extras(errors, live)
+    check_questions(errors, live)
 
     if [a.get("theme") for a in live.get("actions") or []] != [a.get("theme") for a in plan.get("actions") or []]:
         errors.append("`actions` must follow the plan")
@@ -392,10 +376,5 @@ CHECKS = {"items": items, "themes": themes, "plan": plan, "content": content}
 
 
 def run(cfg, info, *names):
-    """Run the named checks; return every error, labelled, and log failures for the run's metrics."""
-    errors = [f"{name}: {error}" for name in names for error in CHECKS[name](cfg, info)]
-    if errors:
-        entry = {"at": datetime.datetime.now().isoformat(timespec="seconds"), "checks": list(names), "errors": errors}
-        with open("checks_log.jsonl", "a") as f:
-            f.write(json.dumps(entry) + "\n")
-    return errors
+    """Run the named checks; return every error, labelled."""
+    return [f"{name}: {error}" for name in names for error in CHECKS[name](cfg, info)]
