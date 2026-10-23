@@ -30,5 +30,4 @@ def fetch(src, since, limit, profile_dir, timeout=None):
             )
             if len(items) >= limit:
                 break
-    oldest = min((i["date"] for i in items), default=None)
-    return items, {"coverageFrom": oldest, "limitReached": len(items) >= limit}
+    return items

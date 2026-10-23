@@ -33,8 +33,8 @@ if errors or not os.path.exists("out/email.eml"):
 print("gate: recipient in the user scope, every check passed")
 
 get = lambda k, d=None: config.env(k) or d
-host, user, pw = get("SMTP_HOST"), get("SMTP_USER"), get("SMTP_PASSWORD")
-if not (host and user and pw):
+host, user, pw = get("SMTP_HOST", "smtp.gmail.com"), get("SMTP_USER"), get("SMTP_PASSWORD")
+if not (user and pw):
     sys.exit("NOT SET UP: email settings are missing. Setup asks for them (setup/SKILL.md, Email).")
 port, sender = int(get("SMTP_PORT", "587")), get("SMTP_FROM", user)
 

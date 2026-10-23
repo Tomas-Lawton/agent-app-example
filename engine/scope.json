@@ -28,7 +28,7 @@
   },
   "connectionTypes": {
     "service": {
-      "label": "Online service: any feed or API, public or with a key (helpdesks, issue trackers, community forums, survey and review tools, app stores)",
+      "label": "Online service: any JSON API, public or with a read only key (helpdesks, issue trackers, survey and review tools)",
       "access": "read only: plain GET requests over HTTPS to the hosts approved in the user scope; a key, if needed, is read from the local .env by name",
       "needs": [
         "which service",
@@ -38,9 +38,6 @@
       "reader": "engine/readers/service.py",
       "authTypes": [
         "bearer",
-        "basic",
-        "header",
-        "query",
         "client_credentials"
       ],
       "maxPages": 20

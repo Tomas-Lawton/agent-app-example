@@ -129,9 +129,4 @@ def fetch(src, since, limit, timeout=30, max_bytes=1_000_000_000):
                 "ratingScale": src.get("ratingScale") if rating is not None else None,
             }
         )
-    oldest = min((i["date"] for i in items), default=None)
-    return items, {
-        "coverageFrom": oldest,
-        "limitReached": len(items) >= limit,
-        "bytes": int(r.get("totalBytesProcessed", 0) or 0),
-    }
+    return items

@@ -27,7 +27,6 @@ def reader(src):
     return importlib.import_module("readers.bigquery"), {"max_bytes": scope["collect"]["warehouseMaxBytesBilled"]}
 
 
-
 def local_date(value, timezone):
     """The day an item was written, in the profile's timezone. Sources give dates or UTC timestamps; a ticket sent at
     9am in Sydney is 11pm the day before in UTC, so the date is taken after converting."""
@@ -41,6 +40,7 @@ def local_date(value, timezone):
         moment = moment.astimezone(ZoneInfo(timezone))
     return moment.date().isoformat()
 
+
 log, items, seen, dupes = [], [], set(), 0
 for src in cfg["sources"]:
     t = src["type"]
@@ -49,7 +49,7 @@ for src in cfg["sources"]:
     limit = min(int(src.get("maxItems", scope["collect"]["maxItemsPerSource"])), scope["collect"]["maxItemsPerSource"])
     try:
         mod, kw = reader(src)
-        got, meta = mod.fetch(src, info["since"], limit, timeout=scope["collect"]["timeoutSeconds"], **kw)
+        got = mod.fetch(src, info["since"], limit, timeout=scope["collect"]["timeoutSeconds"], **kw)
         kept = []
         for it in got:
             day = local_date(it.get("date"), cfg["timezone"])
@@ -72,15 +72,11 @@ for src in cfg["sources"]:
             else:
                 dupes += bool(n)
         items += kept
-        if meta.get("coverageFrom"):
-            meta["coverageFrom"] = local_date(meta["coverageFrom"], cfg["timezone"])
-        entry.update(status="ok", kept=len(kept), coverageFrom=meta.get("coverageFrom"))
+        entry.update(status="ok", kept=len(kept))
         if hasattr(mod, "page"):
             entry["link"] = mod.page(src)
-        if meta.get("limitReached") and (meta.get("coverageFrom") or "") > info["since"]:
-            entry["note"] = (
-                f"item limit reached; covers {meta['coverageFrom']} to {info['until']}, not the whole window"
-            )
+        if len(got) >= limit:
+            entry["note"] = f"item limit of {limit} reached; may not cover the whole window"
     except config.Blocked as e:
         entry.update(status="blocked", reason=str(e))
     except Exception as e:
@@ -91,31 +87,18 @@ for src in cfg["sources"]:
     )
 
 # the most recent items, up to the use case cap, each with a short id the agent can tag
-# The headline numbers (volume, ratings, items per day and per connection) count everything collected in the window;
-# the agent reads the newest items up to the cap, and the run records exactly which dates those cover.
 cap = scope["collect"]["maxItems"]
 items.sort(key=lambda i: i["date"], reverse=True)
-window = [
-    {"date": i["date"], "rating": i.get("rating"), "ratingScale": i.get("ratingScale"), "source": i["source"]}
-    for i in items
-]
-collected = {}
-for i in items:
-    collected[i["source"]] = collected.get(i["source"], 0) + 1
 capped = len(items) > cap
 items = items[:cap]
-coverage = items[-1]["date"] if capped and items else info["since"]
 counts = {}
 for n, i in enumerate(items, 1):
     i["nativeId"], i["id"] = i["id"], f"{i['source']}-{n:03d}"
     counts[i["source"]] = counts.get(i["source"], 0) + 1
 for e in log:
     if e.get("status") == "ok":
-        e["kept"], e["collected"] = counts.get(e["id"], 0), collected.get(e["id"], 0)
-json.dump(
-    {"items": items, "capped": capped, "coverageFrom": coverage}, open("items.json", "w"), indent=1, ensure_ascii=False
-)
-json.dump(window, open("window.json", "w"), ensure_ascii=False)
+        e["kept"] = counts.get(e["id"], 0)
+json.dump({"items": items, "capped": capped}, open("items.json", "w"), indent=1, ensure_ascii=False)
 json.dump(
     {"duplicatesDropped": dupes, "capped": capped, "sources": log},
     open("collect_log.json", "w"),
@@ -124,16 +107,10 @@ json.dump(
 )
 
 errors = checks.run(cfg, info, "items")
-print(
-    f"run folder: {info['folder']}  |  {info['dateLabel']}  |  window {info['since']} to {info['until']}  |  previous: {info['previous'] or 'none'}"
-)
+print(f"run folder: {info['folder']}  |  {info['dateLabel']}  |  window {info['since']} to {info['until']}")
 print(
     f"{len(items)} items from {sum(e['status'] == 'ok' for e in log)} of {len(log)} connections -> items.json"
-    + (
-        f" (the {cap} most recent of {len(window)}, covering {coverage} to {info['until']}; the headline numbers count all {len(window)})"
-        if capped
-        else ""
-    )
+    + (f" (the newest {cap} in the window)" if capped else "")
 )
 if errors or not items:
     sys.exit(
