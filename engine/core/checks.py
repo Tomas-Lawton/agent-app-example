@@ -1,3 +1,4 @@
+import hashlib
 import json
 import os
 import re
@@ -367,6 +368,50 @@ def content(cfg, info):
             errors.append(f"`headline` cites `{item_id}`, which is not a collected item")
     check_numbers(errors, live, by_id)
     return errors
+
+
+# ---------------------------------------------------------------- claims for the verifier
+
+
+def item_text(it):
+    return ((it.get("title") or "") + " " + it.get("text", "")).strip()
+
+
+def claim_fields(content):
+    """Every piece of the agent's writing that carries citations, labelled by where it sits in the pulse."""
+    fields = [("headline", content.get("headline"))]
+    fields += [(f"theme {t['id']}", t.get("summary")) for t in content.get("themes") or []]
+    fields += [(f"watch {w['id']}", w.get("why")) for w in content.get("watch") or []]
+    for entry in (content.get("themes") or []) + (
+        content.get("watch") or []
+    ):  # each quote must be a clear example of its theme
+        example = f'This feedback is a clear example of "{entry.get("title", "")}"'
+        fields += [(f"quote {entry['id']}", f"{example} [{q['item']}].") for q in entry.get("quotes") or []]
+    for a in content.get("actions") or []:
+        fields.append((f"action {a['theme']}", a.get("detail")))  # optional
+        tk = a.get("ticket") or {}
+        if tk.get("issue") and tk.get("items"):
+            fields.append((f"ticket {a['theme']}", f"{tk['issue']} [{', '.join(tk['items'])}]"))
+    return fields
+
+
+def claims(content, by_id):
+    """Every sentence the agent wrote with citations, with the text of the items it cites, for the verifier."""
+    out = []
+    for where, text in claim_fields(content):
+        for sentence in sentences(text):
+            ids = citations(sentence)
+            if ids:
+                plain = CITE.sub("", sentence).strip()
+                out.append(
+                    {
+                        "id": hashlib.sha1(f"{where}|{plain}".encode()).hexdigest()[:10],
+                        "where": where,
+                        "claim": plain,
+                        "cited": [{"id": i, "text": item_text(by_id.get(i, {}))} for i in ids],
+                    }
+                )
+    return out
 
 
 # ---------------------------------------------------------------- run

@@ -109,7 +109,7 @@ colours: brand #0b2545, brand2 #13315c, accent #c9a227
 Lead with anything that stops customers paying or logging in. Always surface scam reports.
 ```
 
-Optional images (`logo.png`, `header.png`) go in `profiles/<key>/assets/`.
+Optional images go in `profiles/<key>/assets/`: `logo.png` beside the title, and `header.png` (about 1280×320) as a banner above it.
 
 </details>
 

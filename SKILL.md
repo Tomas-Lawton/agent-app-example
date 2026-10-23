@@ -12,7 +12,7 @@ description: Runs a Customer Pulse for a profile in profiles/<key>/ - what custo
 ## Before the first run
 Check the tools once per machine, and install anything missing yourself:
 - **Python 3.9 or newer:** `python3 --version`.
-- **The packages in `requirements.txt`** (scikit-learn and matplotlib, for clustering and the header art), in the project's own virtual environment: if `.venv/` doesn't exist, run `python3 -m venv .venv && .venv/bin/pip install -r requirements.txt`. Use `.venv/bin/python3` instead of `python3` in every command below. Never install system-wide or with `sudo`, and keep the harness's sandbox on; if it blocks something the pulse needs, tell the user rather than working round it.
+- **The packages in `requirements.txt`** (scikit-learn, for grouping similar items), in the project's own virtual environment: if `.venv/` doesn't exist, run `python3 -m venv .venv && .venv/bin/pip install -r requirements.txt`. Use `.venv/bin/python3` instead of `python3` in every command below. Never install system-wide or with `sudo`, and keep the harness's sandbox on; if it blocks something the pulse needs, tell the user rather than working round it.
 - Everything else is the Python standard library. A warehouse connection also needs Google credentials, which setup arranges.
 
 ## Steps
