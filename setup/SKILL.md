@@ -94,6 +94,6 @@ Record it in `user_scope.json` → `schedule`, for example `{"days": ["Mon"], "t
 **Elsewhere:** any scheduler that can start a headless harness on a machine with the project (cron, another cloud's job runner) works, following the same rules: the run skill only, a read only project except `runs/`, a least privilege identity, secrets outside the project.
 
 ## Changing things later
-- Focus, tone, look, output format: edit `PROFILE.md` (its settings at the top, or the free text).
+- Focus, tone, look, output format: edit `PROFILE.md` (its settings at the top, or the free text). Save preferences only there, never in your harness's own memory or user files, which are shared across clients.
 - A connection, the recipient or the schedule: a user scope change; follow the sections above, and confirm with the user.
 - A new kind of connection, write access, looser limits, posting replies: a change to the use case itself, not setup.
